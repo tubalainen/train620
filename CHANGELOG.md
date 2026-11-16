@@ -2,6 +2,12 @@
 
 Varje release får ett avsnitt `## [x.y.z] - ÅÅÅÅ-MM-DD`. Avsnittet blir releasetexten på GitHub.
 
+## [1.1.0] - 2026-11-16
+
+- Historik kan importeras genom att välja en CSV-fil eller dra och släppa den i importrutan. Innehållet visas för granskning innan det importeras.
+- Importen godtar både semikolon och komma som fältavgränsare.
+- Varning om filnamnet ser ut att gälla ett annat bevakat tåg än det valda.
+
 ## [1.0.0] - 2026-11-16
 
 Första releasen.
