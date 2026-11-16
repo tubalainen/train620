@@ -170,9 +170,29 @@ $("logout").addEventListener("click", async () => {
   showView("login");
 });
 
+// ---------------------------------------------------------------- hämtning
+function renderPoll(h) {
+  const status = $("poll-status");
+  const t = h.last_poll_ok
+    ? new Date(h.last_poll_ok).toLocaleString("sv-SE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
+    : null;
+  status.textContent = (t ? `Senast hämtat ${t}.` : "Ingen hämtning har lyckats ännu.") +
+    (h.last_error ? " Senaste försöket misslyckades." : "");
+  status.classList.toggle("err", Boolean(h.last_error));
+}
+
+$("refresh").addEventListener("click", async (e) => {
+  e.target.disabled = true;
+  try {
+    renderPoll(await api("/api/refresh", { method: "POST" }));
+    await loadTrains();
+  } catch (err) { showMessage(err.message); }
+  e.target.disabled = false;
+});
+
 async function enterPanel() {
   showView("panel");
-  await loadTrains();
+  await Promise.all([loadTrains(), api("/api/health").then(renderPoll)]);
 }
 
 (async function start() {

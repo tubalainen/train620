@@ -559,9 +559,9 @@ def delete_train(ident: str):
         conn.execute("DELETE FROM imported_journeys WHERE train_ident = ?", (ident,))
 
 
-@app.post("/api/refresh")
+@app.post("/api/refresh", dependencies=admin_only)
 def refresh():
-    # Öppen för alla, så den får inte gå att använda för att hamra på Trafikverket.
+    # Högst en hämtning per 30 sekunder, även om knappen trycks flera gånger.
     last = get_meta().get("last_poll_ok")
     if not last or datetime.fromisoformat(last) < datetime.now(timezone.utc) - timedelta(seconds=30):
         poll_once()

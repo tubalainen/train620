@@ -42,6 +42,15 @@
 
     <div id="panel" hidden>
       <section class="card">
+        <h3>Hämtning från Trafikverket</h3>
+        <p class="sub">Sker automatiskt med jämna mellanrum. Uppdatera nu hämtar direkt, högst en gång per 30 sekunder.</p>
+        <div class="inline-form">
+          <button id="refresh" type="button">Uppdatera nu</button>
+          <span id="poll-status" class="poll-status"></span>
+        </div>
+      </section>
+
+      <section class="card">
         <h3>Bevakade tåg</h3>
         <p class="sub">Nya tåg hämtas direkt från Trafikverket. Tas ett tåg bort raderas all dess data.</p>
         <div class="table-wrap">
