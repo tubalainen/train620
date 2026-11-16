@@ -20,8 +20,16 @@ Varje uppdatering går till `main` via en pull request och avslutas med en relea
 6. Kontrollera efteråt att körningen gick igenom och att `docker pull` av den nya versionen
    fungerar utan inloggning. Rapportera resultatet.
 
-Versionsnummer följer semver: patch för rättningar, minor för nya funktioner, major när något
-bryter bakåtkompatibilitet (t.ex. databasformat eller miljövariabler).
+Versionsnummer `x.y.z` väljs efter hur stor ändringen är (användarens regel):
+
+- **Mindre ändringar → `0.0.x`** (höj sista siffran): rättningar, justeringar i text och utseende,
+  små förbättringar av befintliga funktioner.
+- **Halvstora ändringar → `0.x.0`** (höj mittensiffran, nollställ sista): nya funktioner eller
+  sidor, flyttade funktioner, nya inställningar i `.env`.
+- **Major → `x.0.0`** (höj första siffran, nollställ resten): stora omarbetningar, eller när en
+  befintlig installation slutar fungera utan manuella åtgärder (t.ex. nytt databasformat).
+
+Är det oklart vilken nivå en ändring hör till, fråga användaren innan release-PR:en öppnas.
 
 Ändringar som inte påverkar imagen (dokumentation, arbetsflöden, den här filen) mergas via PR
 utan versionshöjning och ger ingen release.
