@@ -2,6 +2,10 @@
 
 Varje release får ett avsnitt `## [x.y.z] - ÅÅÅÅ-MM-DD`. Avsnittet blir releasetexten på GitHub.
 
+## [2.0.2] - 2026-11-16
+
+- Rättar att dashboarden kunde fastna på "Hämtar …" bakom en cache som Cloudflare efter en uppgradering: skript och stilmall får nu versionsnumret i adressen, så att en ny release aldrig blandas med cachade filer från en äldre.
+
 ## [2.0.1] - 2026-11-16
 
 - Knappen *Uppdatera nu* har flyttats från dashboarden till adminsidan, tillsammans med när data senast hämtades. Den kräver nu inloggning.
