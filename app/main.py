@@ -6,6 +6,8 @@ dem i SQLite. Webbgränssnittet läser färdig statistik från /api/stats.
 from __future__ import annotations
 
 import csv
+import hashlib
+import hmac
 import io
 import json
 import logging
@@ -14,6 +16,7 @@ import re
 import sqlite3
 import statistics
 import threading
+import time
 import urllib.request
 from contextlib import asynccontextmanager, contextmanager
 from datetime import date, datetime, timedelta, timezone
@@ -21,7 +24,8 @@ from pathlib import Path
 from xml.sax.saxutils import quoteattr
 from zoneinfo import ZoneInfo
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -30,6 +34,7 @@ API_KEY = os.environ.get("TRAFIKVERKET_API_KEY", "").strip()
 DB_PATH = os.environ.get("DB_PATH", "/data/trains.db")
 POLL_SECONDS = max(60, int(os.environ.get("POLL_INTERVAL_SECONDS", "300")))
 DELAY_THRESHOLD = int(os.environ.get("DELAY_THRESHOLD_MIN", "5"))
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 INITIAL_TRAINS = [t for t in os.environ.get("INITIAL_TRAINS", "620").replace(" ", "").split(",") if t]
 TZ = ZoneInfo("Europe/Stockholm")
 _version_file = Path(__file__).parent.parent / "VERSION"
@@ -458,10 +463,48 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Tågkoll", lifespan=lifespan, docs_url=None, redoc_url=None)
+STATIC_DIR = Path(__file__).parent / "static"
+
+# ----------------------------------------------------------------------- admin
+# Inloggningen ger en kaka "<utgångstid>.<HMAC>" signerad med lösenordet. Byts lösenordet
+# blir alla gamla inloggningar ogiltiga.
+SESSION_COOKIE = "tagkoll_admin"
+SESSION_SECONDS = 7 * 24 * 3600
+
+
+def _sign(expires: str) -> str:
+    return hmac.new(ADMIN_PASSWORD.encode(), f"tagkoll-admin:{expires}".encode(), hashlib.sha256).hexdigest()
+
+
+def session_valid(token: str | None) -> bool:
+    if not ADMIN_PASSWORD or not token or "." not in token:
+        return False
+    expires, signature = token.split(".", 1)
+    if not expires.isdigit() or int(expires) < time.time():
+        return False
+    return hmac.compare_digest(signature, _sign(expires))
+
+
+def require_admin(request: Request) -> None:
+    if not ADMIN_PASSWORD:
+        raise HTTPException(503, "Admin är avstängt. Sätt ADMIN_PASSWORD i .env och starta om containern.")
+    if not session_valid(request.cookies.get(SESSION_COOKIE)):
+        raise HTTPException(401, "Logga in som admin först.")
+
+
+admin_only = [Depends(require_admin)]
 
 
 class TrainIn(BaseModel):
     ident: str
+
+
+class LoginIn(BaseModel):
+    password: str
+
+
+class ResetIn(BaseModel):
+    confirm: str
 
 
 class ImportIn(BaseModel):
@@ -489,7 +532,7 @@ def list_trains():
     return [train_overview(i) for i in idents]
 
 
-@app.post("/api/trains", status_code=201)
+@app.post("/api/trains", status_code=201, dependencies=admin_only)
 def add_train(body: TrainIn):
     ident = body.ident.strip()
     if not IDENT_RE.match(ident):
@@ -507,7 +550,7 @@ def add_train(body: TrainIn):
     return {**train_overview(ident), "found": found}
 
 
-@app.delete("/api/trains/{ident}", status_code=204)
+@app.delete("/api/trains/{ident}", status_code=204, dependencies=admin_only)
 def delete_train(ident: str):
     require_train(ident)
     with db() as conn:
@@ -518,7 +561,10 @@ def delete_train(ident: str):
 
 @app.post("/api/refresh")
 def refresh():
-    poll_once()
+    # Öppen för alla, så den får inte gå att använda för att hamra på Trafikverket.
+    last = get_meta().get("last_poll_ok")
+    if not last or datetime.fromisoformat(last) < datetime.now(timezone.utc) - timedelta(seconds=30):
+        poll_once()
     return health()
 
 
@@ -544,7 +590,7 @@ def stats(train: str, days: int | None = None):
     }
 
 
-@app.post("/api/trains/{ident}/import")
+@app.post("/api/trains/{ident}/import", dependencies=admin_only)
 def import_history(ident: str, body: ImportIn):
     """Importerar historik per avgångsdag: datum;försening_min;inställt (inställt = ja/nej, valfri).
 
@@ -578,4 +624,49 @@ def import_history(ident: str, body: ImportIn):
     return {"imported": len(records), "skipped_lines": errors}
 
 
-app.mount("/", StaticFiles(directory=Path(__file__).parent / "static", html=True), name="static")
+@app.get("/api/admin/session")
+def admin_session(request: Request):
+    return {"enabled": bool(ADMIN_PASSWORD), "logged_in": session_valid(request.cookies.get(SESSION_COOKIE)),
+            "initial_trains": [t for t in INITIAL_TRAINS if IDENT_RE.match(t)]}
+
+
+@app.post("/api/admin/login")
+def admin_login(body: LoginIn, response: Response):
+    if not ADMIN_PASSWORD:
+        raise HTTPException(503, "Admin är avstängt. Sätt ADMIN_PASSWORD i .env och starta om containern.")
+    if not hmac.compare_digest(body.password.encode(), ADMIN_PASSWORD.encode()):
+        time.sleep(1)  # bromsar gissningar
+        raise HTTPException(401, "Fel lösenord.")
+    expires = str(int(time.time()) + SESSION_SECONDS)
+    response.set_cookie(SESSION_COOKIE, f"{expires}.{_sign(expires)}", max_age=SESSION_SECONDS,
+                        httponly=True, samesite="strict", path="/")
+    return {"logged_in": True}
+
+
+@app.post("/api/admin/logout")
+def admin_logout(response: Response):
+    response.delete_cookie(SESSION_COOKIE, path="/")
+    return {"logged_in": False}
+
+
+@app.post("/api/admin/reset", dependencies=admin_only)
+def admin_reset(body: ResetIn):
+    """Raderar alla tåg och all data och börjar om med tågen i INITIAL_TRAINS."""
+    if body.confirm.strip() != "RADERA":
+        raise HTTPException(422, "Skriv RADERA för att bekräfta.")
+    with poll_lock:
+        with db() as conn:
+            for table in ("announcements", "imported_journeys", "trains", "meta"):
+                conn.execute(f"DELETE FROM {table}")
+        init_db()
+    log.warning("All data raderad via admin, börjar om med tåg %s", ", ".join(INITIAL_TRAINS))
+    threading.Thread(target=poll_once, kwargs={"days_back": None}, daemon=True).start()
+    return {"trains": [t for t in INITIAL_TRAINS if IDENT_RE.match(t)]}
+
+
+@app.get("/admin", include_in_schema=False)
+def admin_page():
+    return FileResponse(STATIC_DIR / "admin.html")
+
+
+app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

@@ -27,8 +27,10 @@ och överlever omstarter och ombyggen.
 - Ett tåg räknas som **försenat** när det ankommer slutstationen mer än 5 minuter efter tidtabell
   (samma gräns som det officiella punktlighetsmåttet). Inställda och delvis inställda avgångar
   räknas som ej i tid.
-- Äldre historik kan läggas in under *Importera historik (CSV)* genom att välja eller dra in en
-  CSV-fil, eller klistra in rader. En rad per dag:
+- Tåg läggs till och tas bort på adminsidan `/admin`, som skyddas av `ADMIN_PASSWORD` i `.env`.
+  Där finns också *Radera allt och börja om*.
+- Äldre historik importeras på adminsidan genom att välja eller dra in en CSV-fil, eller
+  klistra in rader. En rad per dag:
   `datum;försening_min;inställt`. Importerade dagar används bara där egna data saknas.
 
 ## Inställningar (`.env`)
@@ -36,12 +38,14 @@ och överlever omstarter och ombyggen.
 | Variabel | Standard | Betydelse |
 |---|---|---|
 | `TRAFIKVERKET_API_KEY` | – | API-nyckel, krävs |
+| `ADMIN_PASSWORD` | – | Lösenord till `/admin`. Tomt = admin avstängt |
 | `PORT` | `8843` | Port på värden |
 | `INITIAL_TRAINS` | `620` | Tåg som bevakas vid allra första start |
 | `POLL_INTERVAL_SECONDS` | `300` | Hur ofta Trafikverket tillfrågas |
 | `DELAY_THRESHOLD_MIN` | `5` | Gräns för "försenat", i minuter |
 
-Appen har ingen inloggning – kör den bara på ett nät du litar på.
+Dashboarden är öppen för alla som når porten; bara `/admin` kräver lösenord. Lösenordet skickas
+okrypterat över vanlig http, så kör appen bara på ett nät du litar på.
 
 ## Releaser
 
