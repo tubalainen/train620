@@ -25,7 +25,7 @@ from xml.sax.saxutils import quoteattr
 from zoneinfo import ZoneInfo
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
-from fastapi.responses import FileResponse
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -664,9 +664,28 @@ def admin_reset(body: ResetIn):
     return {"trains": [t for t in INITIAL_TRAINS if IDENT_RE.match(t)]}
 
 
+def html_page(name: str) -> HTMLResponse:
+    """Sidan med versionsnumret i skript- och stilmallsadresserna.
+
+    En cache framför appen (t.ex. Cloudflare) cachar .js och .css men inte HTML. Med versionen i
+    adressen hämtas nya filer vid varje release i stället för att gamla blandas med ny HTML.
+    """
+    text = (STATIC_DIR / name).read_text(encoding="utf-8")
+    for asset in ("style.css", "app.js", "admin.js"):
+        text = text.replace(f'"{asset}"', f'"{asset}?v={VERSION}"')
+    return HTMLResponse(text, headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/", include_in_schema=False)
+@app.get("/index.html", include_in_schema=False)
+def index_page():
+    return html_page("index.html")
+
+
 @app.get("/admin", include_in_schema=False)
+@app.get("/admin.html", include_in_schema=False)
 def admin_page():
-    return FileResponse(STATIC_DIR / "admin.html")
+    return html_page("admin.html")
 
 
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
