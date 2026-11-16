@@ -546,10 +546,15 @@ def stats(train: str, days: int | None = None):
 
 @app.post("/api/trains/{ident}/import")
 def import_history(ident: str, body: ImportIn):
-    """Importerar historik per avgångsdag: datum;försening_min;inställt (inställt = ja/nej, valfri)."""
+    """Importerar historik per avgångsdag: datum;försening_min;inställt (inställt = ja/nej, valfri).
+
+    Fält skiljs med semikolon eller komma.
+    """
     require_train(ident)
     records, errors = [], []
-    for n, row in enumerate(csv.reader(io.StringIO(body.csv.strip()), delimiter=";"), start=1):
+    text = body.csv.lstrip("\ufeff").strip()
+    delimiter = ";" if ";" in text else ","
+    for n, row in enumerate(csv.reader(io.StringIO(text), delimiter=delimiter), start=1):
         row = [c.strip() for c in row]
         if not row or not row[0] or row[0].lower() in ("datum", "date"):
             continue

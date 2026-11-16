@@ -27,7 +27,8 @@ och överlever omstarter och ombyggen.
 - Ett tåg räknas som **försenat** när det ankommer slutstationen mer än 5 minuter efter tidtabell
   (samma gräns som det officiella punktlighetsmåttet). Inställda och delvis inställda avgångar
   räknas som ej i tid.
-- Äldre historik kan läggas in under *Importera historik (CSV)*, en rad per dag:
+- Äldre historik kan läggas in under *Importera historik (CSV)* genom att välja eller dra in en
+  CSV-fil, eller klistra in rader. En rad per dag:
   `datum;försening_min;inställt`. Importerade dagar används bara där egna data saknas.
 
 ## Inställningar (`.env`)

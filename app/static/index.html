@@ -115,9 +115,15 @@
 
       <details class="card import">
         <summary>Importera historik (CSV)</summary>
-        <p class="sub">En rad per avgångsdag: <code>datum;försening_min;inställt</code>, t.ex. <code>2026-10-01;7;nej</code>. Importerade dagar används bara där egna insamlade data saknas.</p>
+        <p class="sub">Historiken läggs till det valda tåget. En rad per avgångsdag: <code>datum;försening_min;inställt</code>, t.ex. <code>2026-10-01;7;nej</code>. Semikolon eller komma går bra. Importerade dagar används bara där egna insamlade data saknas.</p>
         <form id="import-form">
-          <textarea id="import-text" rows="5" placeholder="2026-10-01;7;nej&#10;2026-10-02;;ja" required></textarea>
+          <label id="drop" class="drop" for="import-file">
+            <input id="import-file" type="file" accept=".csv,.txt,text/csv,text/plain">
+            <strong>Släpp en CSV-fil här</strong>
+            <span>eller klicka för att välja en fil</span>
+            <span id="drop-info" class="drop-info" hidden></span>
+          </label>
+          <textarea id="import-text" rows="5" placeholder="… eller klistra in rader här:&#10;2026-10-01;7;nej&#10;2026-10-02;;ja" aria-label="CSV-rader" required></textarea>
           <input id="import-source" placeholder="Källa (valfritt)" maxlength="60">
           <button type="submit">Importera</button>
         </form>
