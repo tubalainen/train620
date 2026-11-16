@@ -10,4 +10,5 @@ Första releasen.
 - Dashboard med punktlighet, försenade och inställda avgångar, medelförsening samt försening per avgång, vecka, veckodag och station.
 - Tågnummer läggs till och tas bort i gränssnittet. Tåg 620 bevakas från start.
 - CSV-import av äldre historik.
+- Daglig säkerhetskontroll av imagen med Trivy.
 - Docker-image på `ghcr.io/tubalainen/train620`, webbgränssnitt på port 8843.

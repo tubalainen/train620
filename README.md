@@ -51,3 +51,10 @@ Appen har ingen inloggning – kör den bara på ett nät du litar på.
 
 Utan merge släpps ingenting. Varje pull request byggs och provstartas av arbetsflödet *Build*,
 som också stoppar incheckade API-nycklar.
+
+## Säkerhetskontroll
+
+Arbetsflödet *Security* körs varje natt och söker med Trivy efter kända säkerhetshål i den
+senast släppta imagen (operativsystem och Python-paket). Hittas allvarliga hål som har en
+rättning misslyckas körningen och ett ärende öppnas eller uppdateras i repot. Ärendet stängs
+automatiskt när imagen är ren igen. Rättningen är normalt en ny release, som bygger om imagen.
