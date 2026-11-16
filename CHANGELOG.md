@@ -2,6 +2,11 @@
 
 Varje release får ett avsnitt `## [x.y.z] - ÅÅÅÅ-MM-DD`. Avsnittet blir releasetexten på GitHub.
 
+## [2.0.1] - 2026-11-16
+
+- Knappen *Uppdatera nu* har flyttats från dashboarden till adminsidan, tillsammans med när data senast hämtades. Den kräver nu inloggning.
+- Länken till Admin i dashboardens övre hörn är borttagen. Adminsidan nås direkt på `/admin`.
+
 ## [2.0.0] - 2026-11-16
 
 **Kräver ändring i `.env`:** lägg till `ADMIN_PASSWORD=ditt-lösenord` och starta om containern. Utan lösenordet går det inte längre att lägga till, ta bort eller importera.

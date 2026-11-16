@@ -444,7 +444,7 @@ function render() {
 async function loadStats() {
   if (!state.train) {
     $("content").hidden = true;
-    showMessage("Inga tåg bevakas. Lägg till tåg under Admin för att börja samla data.", true);
+    showMessage("Inga tåg bevakas. Lägg till tåg på adminsidan /admin för att börja samla data.", true);
     return;
   }
   $("charts").classList.add("loading");
@@ -479,16 +479,6 @@ $("periods").addEventListener("click", (e) => {
   localStorage.setItem("days", state.days);
   renderTrains();
   loadStats().catch((err) => showMessage(err.message));
-});
-
-$("refresh").addEventListener("click", async (e) => {
-  e.target.disabled = true;
-  try {
-    await api("/api/refresh", { method: "POST" });
-    await loadTrains();
-    await loadStats();
-  } catch (err) { showMessage(err.message); }
-  e.target.disabled = false;
 });
 
 let resizeTimer;

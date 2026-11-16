@@ -202,3 +202,5 @@ footer { padding-top: 22px; padding-bottom: 40px; color: var(--muted); font-size
 .remove-btn:hover { color: var(--critical); border-color: var(--critical); background: none; }
 .import-grid textarea { width: 100%; font-family: ui-monospace, monospace; font-size: 13px; }
 .import-grid .field[id="import-source"] { width: 260px; max-width: 100%; }
+.poll-status { color: var(--ink-2); font-size: 13.5px; }
+.poll-status.err { color: var(--critical); }
