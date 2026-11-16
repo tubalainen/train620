@@ -215,8 +215,7 @@ function renderTrains() {
   for (const t of state.trains) {
     const active = t.ident === state.train;
     box.append(el("span", { class: "chip" + (active ? " active" : "") },
-      el("button", { type: "button", role: "tab", "aria-selected": active, text: t.ident, title: t.origin ? `${t.origin} → ${t.destination}` : "", onclick: () => selectTrain(t.ident) }),
-      el("button", { type: "button", class: "remove", "aria-label": `Ta bort tåg ${t.ident}`, title: "Ta bort", text: "✕", onclick: () => removeTrain(t.ident) })));
+      el("button", { type: "button", role: "tab", "aria-selected": active, text: t.ident, title: t.origin ? `${t.origin} → ${t.destination}` : "", onclick: () => selectTrain(t.ident) })));
   }
   for (const b of $("periods").children) b.setAttribute("aria-pressed", String(b.dataset.days === state.days));
 }
@@ -445,7 +444,7 @@ function render() {
 async function loadStats() {
   if (!state.train) {
     $("content").hidden = true;
-    showMessage("Inga tåg bevakas. Lägg till ett tågnummer för att börja samla data.", true);
+    showMessage("Inga tåg bevakas. Lägg till tåg under Admin för att börja samla data.", true);
     return;
   }
   $("charts").classList.add("loading");
@@ -474,35 +473,6 @@ function selectTrain(ident) {
   loadStats().catch((e) => showMessage(e.message));
 }
 
-async function removeTrain(ident) {
-  if (!confirm(`Ta bort tåg ${ident}? All insamlad data för tåget raderas.`)) return;
-  try {
-    await api(`/api/trains/${ident}`, { method: "DELETE" });
-    showMessage(`Tåg ${ident} togs bort.`, true);
-    await loadTrains();
-    await loadStats();
-  } catch (e) { showMessage(e.message); }
-}
-
-$("add-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const input = $("add-input");
-  const button = e.target.querySelector("button");
-  button.disabled = true;
-  try {
-    const added = await api("/api/trains", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ident: input.value.trim() }) });
-    input.value = "";
-    showMessage(added.found
-      ? `Tåg ${added.ident} bevakas nu.`
-      : `Tåg ${added.ident} bevakas nu, men Trafikverket har inga uppgifter om det just nu.`, Boolean(added.found));
-    state.train = added.ident;
-    localStorage.setItem("train", added.ident);
-    await loadTrains();
-    await loadStats();
-  } catch (err) { showMessage(err.message); }
-  button.disabled = false;
-});
-
 $("periods").addEventListener("click", (e) => {
   if (e.target.dataset.days === undefined) return;
   state.days = e.target.dataset.days;
@@ -519,42 +489,6 @@ $("refresh").addEventListener("click", async (e) => {
     await loadStats();
   } catch (err) { showMessage(err.message); }
   e.target.disabled = false;
-});
-
-const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
-async function loadImportFile(file) {
-  if (!file) return;
-  const info = $("drop-info");
-  info.hidden = false;
-  if (file.size > MAX_IMPORT_BYTES) { info.textContent = `${file.name} är för stor (högst 2 MB).`; return; }
-  const text = (await file.text()).replace(/^\uFEFF/, "");
-  if (text.includes("\u0000")) { info.textContent = `${file.name} ser inte ut att vara en textfil.`; return; }
-  $("import-text").value = text.trim();
-  const rows = text.split(/\r?\n/).filter((l) => /^\s*\d{4}-\d{2}-\d{2}/.test(l)).length;
-  info.textContent = `${file.name} – ${nf(rows)} rader med datum. Granska nedan och klicka på Importera.`;
-  // Varna om filnamnet pekar på ett annat bevakat tåg än det valda.
-  const other = state.trains.find((t) => t.ident !== state.train && new RegExp(`(^|\\D)${t.ident}(\\D|$)`).test(file.name));
-  const self = new RegExp(`(^|\\D)${state.train}(\\D|$)`).test(file.name);
-  showMessage(other && !self ? `Filnamnet ser ut att gälla tåg ${other.ident}, men valt tåg är ${state.train}. Byt tåg överst om det är fel.` : "");
-}
-const drop = $("drop");
-$("import-file").addEventListener("change", (e) => { loadImportFile(e.target.files[0]); e.target.value = ""; });
-for (const type of ["dragenter", "dragover"]) drop.addEventListener(type, (e) => { e.preventDefault(); drop.classList.add("over"); });
-for (const type of ["dragleave", "drop"]) drop.addEventListener(type, (e) => { e.preventDefault(); drop.classList.remove("over"); });
-drop.addEventListener("drop", (e) => loadImportFile(e.dataTransfer.files[0]));
-// En fil som släpps utanför rutan ska inte öppnas av webbläsaren i stället för sidan.
-for (const type of ["dragover", "drop"]) window.addEventListener(type, (e) => e.preventDefault());
-
-$("import-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  try {
-    const res = await api(`/api/trains/${state.train}/import`, { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ csv: $("import-text").value, source: $("import-source").value.trim() || "import" }) });
-    showMessage(`${res.imported} dagar importerades.` + (res.skipped_lines.length ? ` Rader som inte gick att tolka: ${res.skipped_lines.join(", ")}.` : ""), !res.skipped_lines.length);
-    if (res.imported) { $("import-text").value = ""; $("drop-info").hidden = true; }
-    await loadTrains();
-    await loadStats();
-  } catch (err) { showMessage(err.message); }
 });
 
 let resizeTimer;

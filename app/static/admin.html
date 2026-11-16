@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="robots" content="noindex">
+  <title>Tågkoll Admin</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232a78d6'/%3E%3Cpath d='M9 22V11a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v11M9 16h14M12 26l2-4m6 4-2-4' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 22V11a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v11M9 16h14M12 26l2-4m6 4-2-4" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
+      <div>
+        <h1>Tågkoll Admin</h1>
+        <p>Bevakade tåg, import och radering</p>
+      </div>
+    </div>
+    <div class="sync">
+      <a class="nav-link" href="/">← Till dashboarden</a>
+      <button id="logout" type="button" hidden>Logga ut</button>
+    </div>
+  </header>
+
+  <main class="admin-main">
+    <p id="message" class="message" role="status" hidden></p>
+
+    <section id="disabled" class="card login" hidden>
+      <h3>Admin är avstängt</h3>
+      <p class="sub">Lägg till <code>ADMIN_PASSWORD=ditt-lösenord</code> i <code>.env</code> och starta om containern med <code>docker compose up -d</code>.</p>
+    </section>
+
+    <section id="login" class="card login" hidden>
+      <h3>Logga in</h3>
+      <form id="login-form">
+        <input id="password" class="field" type="password" autocomplete="current-password" placeholder="Lösenord" aria-label="Lösenord" required>
+        <button class="primary" type="submit">Logga in</button>
+      </form>
+    </section>
+
+    <div id="panel" hidden>
+      <section class="card">
+        <h3>Bevakade tåg</h3>
+        <p class="sub">Nya tåg hämtas direkt från Trafikverket. Tas ett tåg bort raderas all dess data.</p>
+        <div class="table-wrap">
+          <table class="admin-table">
+            <thead><tr><th>Tåg</th><th>Sträcka</th><th class="num">Avgångar</th><th>Data sedan</th><th></th></tr></thead>
+            <tbody id="train-rows"></tbody>
+          </table>
+        </div>
+        <form id="add-form" class="inline-form" autocomplete="off">
+          <input id="add-input" class="field" inputmode="numeric" pattern="\d{1,6}" maxlength="6" placeholder="Tågnummer" aria-label="Tågnummer att lägga till" required>
+          <button type="submit">Lägg till tåg</button>
+        </form>
+      </section>
+
+      <section class="card">
+        <h3>Importera historik (CSV)</h3>
+        <p class="sub">En rad per avgångsdag: <code>datum;försening_min;inställt</code>, t.ex. <code>2026-10-01;7;nej</code> eller <code>2026-10-02;;ja</code>. Semikolon eller komma går bra. Importerade dagar används bara där egna insamlade data saknas.</p>
+        <form id="import-form" class="import-grid">
+          <label class="select">Tåg <select id="import-train" required></select></label>
+          <label id="drop" class="drop" for="import-file">
+            <input id="import-file" type="file" accept=".csv,.txt,text/csv,text/plain">
+            <strong>Släpp en CSV-fil här</strong>
+            <span>eller klicka för att välja en fil</span>
+            <span id="drop-info" class="drop-info" hidden></span>
+          </label>
+          <textarea id="import-text" class="field" rows="6" placeholder="… eller klistra in rader här:&#10;2026-10-01;7;nej&#10;2026-10-02;;ja" aria-label="CSV-rader" required></textarea>
+          <input id="import-source" class="field" placeholder="Källa (valfritt)" maxlength="60">
+          <button type="submit">Importera</button>
+        </form>
+      </section>
+
+      <section class="card danger-card">
+        <h3>Radera allt och börja om</h3>
+        <p class="sub">Tar bort alla tåg, all insamlad och importerad data. Därefter bevakas bara tåget/tågen i <code>INITIAL_TRAINS</code> (<span id="initial-trains">620</span>) och insamlingen börjar om. Det går inte att ångra.</p>
+        <form id="reset-form" class="inline-form" autocomplete="off">
+          <input id="reset-confirm" class="field" placeholder="Skriv RADERA" aria-label="Skriv RADERA för att bekräfta">
+          <button id="reset-button" class="danger" type="submit" disabled>Radera allt</button>
+        </form>
+      </section>
+    </div>
+  </main>
+
+  <script src="admin.js"></script>
+</body>
+</html>
