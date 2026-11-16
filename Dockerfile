@@ -7,6 +7,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
+COPY VERSION .
 RUN useradd --system --uid 10001 tagkoll && mkdir /data && chown tagkoll /data
 USER tagkoll
 VOLUME /data

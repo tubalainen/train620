@@ -1,0 +1,39 @@
+name: Build
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Inga API-nycklar i repot
+        run: |
+          if git grep -nIE '(TRAFIKVERKET_API_KEY\s*[=:]\s*|authenticationkey=)["'"'"']?[0-9a-fA-F]{32}' -- . ':!.github/workflows/build.yml'; then
+            echo "::error::En API-nyckel ser ut att vara incheckad. Nyckeln hör hemma i .env."; exit 1
+          fi
+
+      - name: VERSION och CHANGELOG.md hör ihop
+        run: .github/release-notes.sh "$(tr -d '[:space:]' < VERSION)"
+
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: tagkoll:ci
+          cache-from: type=gha
+
+      - name: Starta containern och kontrollera hälsan
+        run: |
+          docker run -d --name tagkoll -p 8843:8843 tagkoll:ci
+          for i in $(seq 1 20); do
+            if curl -fsS http://localhost:8843/api/health; then exit 0; fi
+            sleep 1
+          done
+          docker logs tagkoll; exit 1

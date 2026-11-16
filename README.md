@@ -10,8 +10,11 @@ fler tågnummer läggs till och tas bort direkt i gränssnittet.
 
 ```bash
 cp .env.example .env        # fyll i TRAFIKVERKET_API_KEY
-docker compose up -d --build
+docker compose pull && docker compose up -d
 ```
+
+Det hämtar den senaste releasen från `ghcr.io/tubalainen/train620`. Samma kommando uppgraderar
+till en ny release. För att i stället bygga från källkoden: `docker compose up -d --build`.
 
 Öppna sedan `http://<värd>:8843`. Databasen (SQLite) ligger i Docker-volymen `tagkoll-data`
 och överlever omstarter och ombyggen.
@@ -38,3 +41,13 @@ och överlever omstarter och ombyggen.
 | `DELAY_THRESHOLD_MIN` | `5` | Gräns för "försenat", i minuter |
 
 Appen har ingen inloggning – kör den bara på ett nät du litar på.
+
+## Releaser
+
+1. En release-PR mot `main` höjer `VERSION` och lägger till ett avsnitt i `CHANGELOG.md`.
+2. Att merga PR:en är godkännandet. Då bygger arbetsflödet *Release* imagen, pushar den till
+   `ghcr.io/tubalainen/train620` (taggarna `x.y.z`, `x.y`, `x` och `latest`) och skapar taggen
+   `vx.y.z` med en GitHub-release.
+
+Utan merge släpps ingenting. Varje pull request byggs och provstartas av arbetsflödet *Build*,
+som också stoppar incheckade API-nycklar.
