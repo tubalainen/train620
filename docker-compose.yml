@@ -1,0 +1,14 @@
+services:
+  tagkoll:
+    build: .
+    image: tagkoll
+    container_name: tagkoll
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8843}:8843"
+    env_file: .env
+    volumes:
+      - tagkoll-data:/data
+
+volumes:
+  tagkoll-data:
