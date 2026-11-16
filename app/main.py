@@ -32,6 +32,8 @@ POLL_SECONDS = max(60, int(os.environ.get("POLL_INTERVAL_SECONDS", "300")))
 DELAY_THRESHOLD = int(os.environ.get("DELAY_THRESHOLD_MIN", "5"))
 INITIAL_TRAINS = [t for t in os.environ.get("INITIAL_TRAINS", "620").replace(" ", "").split(",") if t]
 TZ = ZoneInfo("Europe/Stockholm")
+_version_file = Path(__file__).parent.parent / "VERSION"
+VERSION = _version_file.read_text().strip() if _version_file.exists() else "dev"
 IDENT_RE = re.compile(r"^\d{1,6}$")
 # Hur länge efter planerad ankomst vi väntar på en ankomsttid innan resan räknas som "uppgift saknas".
 PENDING_GRACE = timedelta(hours=4)
@@ -476,7 +478,7 @@ def require_train(ident: str) -> None:
 @app.get("/api/health")
 def health():
     meta = get_meta()
-    return {"ok": True, "api_key": bool(API_KEY), "last_poll_ok": meta.get("last_poll_ok"),
+    return {"ok": True, "version": VERSION, "api_key": bool(API_KEY), "last_poll_ok": meta.get("last_poll_ok"),
             "last_error": meta.get("last_error") or None}
 
 
@@ -538,6 +540,7 @@ def stats(train: str, days: int | None = None):
         "last_poll_ok": meta.get("last_poll_ok"),
         "last_error": meta.get("last_error") or None,
         "poll_seconds": POLL_SECONDS,
+        "version": VERSION,
     }
 
 

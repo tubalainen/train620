@@ -406,7 +406,7 @@ function renderSync(d) {
   }
   text.classList.toggle("err", Boolean(d.last_error));
   if (d.last_error) text.textContent += " – senaste försöket misslyckades";
-  $("foot").textContent = `Trafikverket tillfrågas var ${Math.round(d.poll_seconds / 60)}:e minut. Ett tåg räknas som försenat när det ankommer slutstationen mer än ${d.threshold} minuter efter tidtabell.`;
+  $("foot").textContent = `Tågkoll ${d.version === "dev" ? "(utvecklingsversion)" : "v" + d.version}. Trafikverket tillfrågas var ${Math.round(d.poll_seconds / 60)}:e minut. Ett tåg räknas som försenat när det ankommer slutstationen mer än ${d.threshold} minuter efter tidtabell.`;
 }
 
 function renderCharts() {

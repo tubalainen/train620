@@ -1,7 +1,7 @@
 services:
   tagkoll:
+    image: ghcr.io/tubalainen/train620:latest
     build: .
-    image: tagkoll
     container_name: tagkoll
     restart: unless-stopped
     ports:
