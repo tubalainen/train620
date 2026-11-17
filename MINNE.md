@@ -107,7 +107,7 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
   Användaren har inte bekräftat linjen med riktiga data efter 2.1.5.
 - **v2.1.6**: Laxå-etiketten visades bara om sträckan var bredare än 70 px – syntes för 643
   men inte för 620. Nu visas den alltid. Användaren var (med rätta) irriterad: **testa alltid
-  båda tågen/riktningarna** (`test/add643.py`-mönstret: spegelvänd kopia av 620) innan release.
+  båda tågen/riktningarna** (t.ex. en spegelvänd kopia av 620 som 643 i en testdatabas) innan release.
 
 ## Spårdata
 
