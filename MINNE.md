@@ -3,7 +3,7 @@
 Överlämning mellan chattsessioner. Läs den här filen och `CLAUDE.md` först i en ny session,
 och uppdatera filen när något viktigt ändras (direkt till `main`, utan PR och release).
 
-*Senast uppdaterad: 2026-11-17, efter release v2.4.0.*
+*Senast uppdaterad: 2026-11-17, inför v2.5.0.*
 
 ## Vad Tågkoll är
 
@@ -11,6 +11,11 @@ Webbapp som samlar förseningar och inställda tåg från Trafikverkets öppna A
 statistiken i en dashboard. Tåg 620 (Karlstad C → Stockholm C) och 643 (Stockholm C →
 Karlstad C, SJ Snabbtåg) bevakas.
 
+- **Kommande avgångar (2.5.0):** hämtningen tar med `DAYS_AHEAD = 7` dagar framåt
+  (`$dateadd(7.00:00:00)`). `load_journeys` ger bara dagar t.o.m. i dag; `upcoming=True` ger
+  framtida dagar, som `/api/stats` returnerar i `upcoming` (ingår inte i statistik, tabell,
+  linjevy eller uppspelningslistan). Prognos före avgång: `forecast_delay`/`estimated_departure`
+  från startstationens `EstimatedTimeAtLocation`.
 - **Dashboard `/`:** äldsta datapunkt per tåg, linjevy (ånglok + spöktåg enligt tidtabell,
   enkel/dubbelspår, färgade förseningssträckor, uppspelning, väljare för alla avgångar med
   egna hållplatsdata (`/api/journeys` = lista, `/api/journey?train=&date=` = en avgång), utfällbar "Var uppstod
@@ -177,6 +182,10 @@ Användarens slutliga besked (efter flera rundor 2.1.2–2.1.5):
 - Besöksräknaren läser IP från `CF-Connecting-IP`/`X-Forwarded-For`. Om användarens Nginx
   Proxy Manager inte skickar vidare dem blir alla besökare samma IP (bara webbläsaren skiljer)
   och siffran blir för låg. Be användaren säga till om siffran ser konstig ut.
+- 2.5.0 är inte provat mot Trafikverket (ingen nyckel i molnsessionen). Kontrollera med riktiga
+  data: att `$dateadd` med positivt värde godtas och att kommande dagar faktiskt kommer med (hur
+  långt fram Trafikverket publicerar är okänt), och om avgångar som ställs in långt i förväg
+  markeras som inställda eller tas bort helt (då blir dagen en lucka i stället för *Inställt*).
 - Användaren har inte bekräftat väljaren i 2.4.0 med riktiga data (testat bara med testdatabas för
   620 och 643). Fråga om listan och uppspelningen av äldre avgångar ser rätt ut.
 - Användaren har inte bekräftat 2.1.6 med riktiga data. Fråga om linjen ser rätt ut för både

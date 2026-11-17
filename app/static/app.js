@@ -231,14 +231,20 @@ function renderToday(journeys) {
   if (!latest) return;
   const isToday = latest.date === new Date().toLocaleDateString("sv-SE");
   let label, detail;
+  const reason = latest.deviations.length ? ` ${latest.deviations.slice(0, 2).join(", ")}.` : "";
   if (latest.status === "pending") {
     const moving = latest.current_delay !== null;
     label = moving ? "På väg" : "Planerat";
-    detail = moving
-      ? `Senast rapporterat: ${fmtDelay(latest.current_delay)}. Beräknad ankomst ${hhmm(latest.estimated_arrival || latest.planned_arrival)}.`
-      : `Avgår ${hhmm(latest.planned_departure)}, ankomst ${hhmm(latest.planned_arrival)}.`;
+    if (moving) {
+      detail = `Senast rapporterat: ${fmtDelay(latest.current_delay)}. Beräknad ankomst ${hhmm(latest.estimated_arrival || latest.planned_arrival)}.`;
+    } else if (latest.forecast_delay > 0) {
+      label = "Väntas bli försenat";
+      detail = forecastText(latest) + reason;
+    } else {
+      detail = `Avgår ${hhmm(latest.planned_departure)}, ankomst ${hhmm(latest.planned_arrival)}.`;
+    }
   } else if (latest.status === "cancelled") {
-    detail = "Hela avgången ställdes in.";
+    detail = "Hela avgången ställdes in." + reason;
   } else if (latest.delay !== null) {
     detail = `Ankom ${latest.destination ?? "slutstationen"} ${hhmm(latest.actual_arrival)} (${fmtDelay(latest.delay)}).`;
   } else {
@@ -246,8 +252,39 @@ function renderToday(journeys) {
   }
   box.replaceChildren(
     el("strong", { text: isToday ? "I dag" : `Senaste avgång, ${fmtLongDate(latest.date)}` }),
-    statusBadge(latest.status, label),
+    statusBadge(latest.status === "pending" && latest.forecast_delay > 0 && latest.current_delay === null ? "delayed" : latest.status, label),
     el("span", { class: "detail", text: detail }));
+}
+
+function forecastText(j) {
+  return `Väntas avgå ${hhmm(j.estimated_departure)} i stället för ${hhmm(j.planned_departure)} (${fmtDelay(j.forecast_delay)})` +
+    (j.estimated_arrival ? `, beräknad ankomst ${hhmm(j.estimated_arrival)}.` : ".");
+}
+
+/** Kommande avgångar: inställningar och prognoser som Trafikverket redan känner till. */
+function renderUpcoming(upcoming) {
+  const box = $("upcoming");
+  box.hidden = !upcoming.length;
+  if (!upcoming.length) return;
+  const notable = upcoming.filter((j) => j.status === "cancelled" || j.status === "partial" || j.forecast_delay > 0);
+  const last = upcoming[upcoming.length - 1].date;
+  const head = el("strong", { text: "Kommande avgångar" });
+  if (!notable.length) {
+    box.replaceChildren(head, el("span", { class: "detail",
+      text: `Inga kända inställningar eller förseningar t.o.m. ${fmtDate(last, { weekday: "short", day: "numeric", month: "short" })}.` }));
+    return;
+  }
+  const list = el("ul", { class: "upcoming-list" }, ...notable.map((j) => {
+    const what = j.status === "cancelled" ? "Hela avgången är inställd."
+      : j.status === "partial" ? "Delar av sträckan är inställda."
+      : forecastText(j);
+    const why = j.deviations.length ? ` ${j.deviations.slice(0, 2).join(", ")}.` : "";
+    return el("li", {},
+      el("span", { class: "upcoming-date", text: fmtDate(j.date, { weekday: "short", day: "numeric", month: "short" }) }),
+      statusBadge(j.status === "pending" ? "delayed" : j.status, j.status === "pending" ? "Väntas bli försenat" : null),
+      el("span", { class: "detail", text: what + why }));
+  }));
+  box.replaceChildren(head, list);
 }
 
 function renderKpis(s, threshold) {
@@ -762,7 +799,10 @@ function lineStatusText(j, points, r, real) {
   const where = r.index === points.length - 1 ? `framme i ${points[r.index].station}` : `vid ${pos}`;
   if (j.status === "cancelled") return `Avgången ställdes in. Loket står kvar i ${points[0].station}.`;
   if (j.status === "pending") {
-    if (j.current_delay === null) return `Planerad avgång ${hhmm(j.planned_departure)} från ${points[0].station}.`;
+    if (j.current_delay === null) {
+      return `Planerad avgång ${hhmm(j.planned_departure)} från ${points[0].station}.` +
+        (j.forecast_delay > 0 ? ` Väntas avgå ${hhmm(j.estimated_departure)} (${fmtDelay(j.forecast_delay)}).` : "");
+    }
     return `På väg, senast ${where}. ${j.current_delay > 0 ? `${j.current_delay} min efter tidtabell.` : "Enligt tidtabell."}`;
   }
   if (real.stoppedAt !== null) return `Tåget kom inte längre än ${points[real.stoppedAt].station}, resten av sträckan ställdes in.`;
@@ -867,6 +907,7 @@ function render() {
   $("train-age").textContent = ageText(t);
   renderSync(d);
   renderToday(d.journeys);
+  renderUpcoming(d.upcoming ?? []);
   renderLine();
   renderKpis(d.summary, d.threshold);
   const has = d.summary.journeys > 0;

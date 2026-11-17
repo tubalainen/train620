@@ -46,6 +46,8 @@ VERSION = _version_file.read_text().strip() if _version_file.exists() else "dev"
 IDENT_RE = re.compile(r"^\d{1,6}$")
 # Hur länge efter planerad ankomst vi väntar på en ankomsttid innan resan räknas som "uppgift saknas".
 PENDING_GRACE = timedelta(hours=4)
+# Så många dagar framåt hämtas avgångar, så att inställningar som är kända i förväg syns tidigt.
+DAYS_AHEAD = 7
 
 log = logging.getLogger("tagkoll")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -266,7 +268,7 @@ def fetch_announcements(idents: list[str], days_back: int | None) -> int:
         return 0
     parts = [
         f'<IN name="AdvertisedTrainIdent" value={quoteattr(",".join(idents))}/>',
-        '<LTE name="ScheduledDepartureDateTime" value="$now"/>',
+        f'<LTE name="ScheduledDepartureDateTime" value="$dateadd({DAYS_AHEAD}.00:00:00)"/>',
     ]
     if days_back is not None:
         parts.append(f'<GT name="ScheduledDepartureDateTime" value="$dateadd(-{days_back}.00:00:00)"/>')
@@ -530,10 +532,13 @@ def build_journey(day: str, rows: list[sqlite3.Row], names: dict[str, str], now:
         status = "partial" if n_canceled else "unknown"
 
     current_delay = None
+    forecast_delay = None  # Trafikverkets prognos för avgången, innan tåget har lämnat startstationen
     if status == "pending":
         seen = [r for r in ordered if r["actual_time"]]
         if seen:
             current_delay = minutes_between(seen[-1]["actual_time"], seen[-1]["advertised_time"])
+        elif origin["estimated_time"] and not origin["canceled"]:
+            forecast_delay = minutes_between(origin["estimated_time"], origin["advertised_time"])
 
     deviations: list[str] = []
     for r in ordered:
@@ -552,6 +557,8 @@ def build_journey(day: str, rows: list[sqlite3.Row], names: dict[str, str], now:
         "status": status,
         "delay": delay,
         "current_delay": current_delay,
+        "forecast_delay": forecast_delay,
+        "estimated_departure": origin["estimated_time"],
         "estimated_arrival": dest["estimated_time"],
         "origin": name(origin["location"]),
         "destination": name(dest["location"]),
@@ -607,14 +614,26 @@ def save_segments(idents: list[str], since: str | None) -> None:
                 )
 
 
-def load_journeys(ident: str, since: str | None) -> list[dict]:
+def load_journeys(ident: str, since: str | None, upcoming: bool = False) -> list[dict]:
+    """Avgångar t.o.m. i dag, nyast först. Med upcoming=True i stället avgångarna efter i dag, närmast först."""
     now = datetime.now(TZ)
+    today = now.date().isoformat()
     with db() as conn:
         names = {r["signature"]: r["name"] for r in conn.execute("SELECT * FROM stations")}
-        args = [ident] + ([since] if since else [])
+        if upcoming:
+            rows = conn.execute("SELECT * FROM announcements WHERE train_ident = ? AND departure_date > ?",
+                                (ident, today)).fetchall()
+            tracks = load_tracks(conn)
+            future: dict[str, list] = {}
+            for r in rows:
+                future.setdefault(r["departure_date"], []).append(r)
+            return [build_journey(day, future[day], names, now, tracks) for day in sorted(future)]
+        args = [ident, today] + ([since] if since else [])
         cond = " AND departure_date >= ?" if since else ""
-        rows = conn.execute(f"SELECT * FROM announcements WHERE train_ident = ?{cond}", args).fetchall()
-        imported = conn.execute(f"SELECT * FROM imported_journeys WHERE train_ident = ?{cond}", args).fetchall()
+        rows = conn.execute(f"SELECT * FROM announcements WHERE train_ident = ? AND departure_date <= ?{cond}",
+                            args).fetchall()
+        imported = conn.execute(f"SELECT * FROM imported_journeys WHERE train_ident = ? AND departure_date <= ?{cond}",
+                                args).fetchall()
         tracks = load_tracks(conn)
     by_day: dict[str, list] = {}
     for r in rows:
@@ -624,7 +643,7 @@ def load_journeys(ident: str, since: str | None) -> list[dict]:
         if r["departure_date"] not in journeys:
             journeys[r["departure_date"]] = {
                 "date": r["departure_date"], "status": r["status"], "delay": r["delay_min"],
-                "current_delay": None, "estimated_arrival": None, "origin": None, "destination": None,
+                "current_delay": None, "forecast_delay": None, "estimated_departure": None, "estimated_arrival": None, "origin": None, "destination": None,
                 "planned_departure": None, "planned_arrival": None, "actual_arrival": None,
                 "operator": None, "product": None, "deviations": [], "source": r["source"] or "import",
                 "stops": [], "points": [], "segments": [],
@@ -923,6 +942,9 @@ def compute_stats(train: str, days: int | None) -> dict:
         "weekdays": weekday_stats(journeys),
         "weeks": weekly_stats(journeys),
         "journeys": journeys,
+        "upcoming": [{k: j[k] for k in ("date", "status", "planned_departure", "planned_arrival", "estimated_departure",
+                                         "estimated_arrival", "forecast_delay", "deviations")}
+                     for j in load_journeys(train, None, upcoming=True)],
         "last_poll_ok": meta.get("last_poll_ok"),
         "fetch_error": bool(meta.get("last_error")),
         "poll_seconds": POLL_SECONDS,
