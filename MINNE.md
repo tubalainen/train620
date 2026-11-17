@@ -116,10 +116,12 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
 
 - Spårdata enligt användaren (slutligt besked): dubbelspår Karlstad C–Skattkärr, enkelspår
   Skattkärr–Laxå ("inget annat"), Laxå–Stockholm stambana med dubbelspår.
-- **620 passerar inte Laxå** utan kör Degerfors–Svartå–Hasselfors (syns i användarens
-  skärmbild). Svartå–Hasselfors räknas som enkelspår (anslutning till stambanan, ej bekräftat
-  separat av användaren). Blanda inte ihop Svartå och Laxå. Knutpunktsregeln i
-  `guess_section` gav dubbelspår där i 2.1.2–2.1.4. Orsaken till att en bit
+- **Trafikverket rapporterar inte alltid Laxå**: i 620:s data kommer Hasselfors direkt efter
+  Svartå. Sträckan delas då vid Laxå (`split` i segmentet: enkelspår före, dubbelspår efter),
+  som användaren valde. Svartå ligger på Värmlandsbanan före Laxå. 643 är samma sträcka
+  spegelvänd; spårdata är riktningsoberoende. Knutpunktsregeln i `guess_section` gav
+  dubbelspår på Svartå–Hasselfors i 2.1.2–2.1.4.
+- Orsaken till att en bit
   efter Degerfors visades som "okänt" i 2.1.0 är inte bekräftad (troligen ett stationsnamn som
   inte matchade); 2.1.2 jämför namn tolerantare och fyller luckor mellan två banor via
   knutpunkten (Laxå). Be användaren bekräfta att inget står som okänt efter uppgraderingen.
