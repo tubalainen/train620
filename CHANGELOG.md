@@ -2,6 +2,10 @@
 
 Varje release får ett avsnitt `## [x.y.z] - ÅÅÅÅ-MM-DD`. Avsnittet blir releasetexten på GitHub.
 
+## [2.1.4] - 2026-11-17
+
+- Rättar spåren på Värmlandsbanan igen: dubbelspår mellan Karlstad C och Skattkärr och enkelspår hela vägen från Skattkärr till Laxå. I 2.1.3 visades Skattkärr–Väse felaktigt som dubbelspår. Från Laxå till Stockholm är det dubbelspår. Ändringen slår igenom vid första hämtningen efter uppgraderingen. Sträckor du själv har ändrat på adminsidan behålls.
+
 ## [2.1.3] - 2026-11-17
 
 - Rättar spåren på Värmlandsbanan: dubbelspår mellan Karlstad C och Väse, enkelspår från Väse till Laxå. Mötesplatser och bangårdar längs enkelspåret räknas inte som dubbelspår. Från Laxå till Stockholm är det som tidigare dubbelspår. Ändringen slår igenom vid första hämtningen efter uppgraderingen. Sträckor du själv har ändrat på adminsidan behålls.
