@@ -55,6 +55,22 @@ IP-adresser eller kakor sparas, och gårdagens hashar raderas tillsammans med sa
 och verktyg som `curl` räknas inte. IP-adressen läses från `CF-Connecting-IP` eller
 `X-Forwarded-For` när appen ligger bakom Cloudflare eller en proxy.
 
+## Säkerhet
+
+- Adminsidan skyddas av `ADMIN_PASSWORD`. Efter 5 felaktiga lösenord per IP spärras inloggningen
+  i 15 minuter, och efter 50 fel totalt per timme spärras den för alla. Sessionerna sparas på
+  servern (bara som hash), gäller i 12 timmar och avslutas vid utloggning eller lösenordsbyte.
+- Alla svar har säkerhetsrubriker (CSP, skydd mot inbäddning, `nosniff` m.fl.). API:t tillåter
+  högst `API_RATE_LIMIT_PER_MINUTE` anrop per IP och minut och högst 3 MB per anrop.
+- Besökarens IP läses ur `CF-Connecting-IP`/`X-Forwarded-For` bara när anropet kommer från en
+  betrodd proxy (`TRUSTED_PROXIES`, standard loopback och privata nät).
+- `docker-compose.yml` kör containern med skrivskyddat filsystem, utan Linux-rättigheter och med
+  tak för minne och processer. `BIND_ADDRESS=127.0.0.1` gör porten nåbar bara från värden.
+- **Rekommenderat i Cloudflare:** lägg `/admin*` och `/api/admin*` bakom Cloudflare Access och
+  sätt en Rate Limiting-regel för `/api/*`. Då når lösenordsgissningar aldrig appen.
+- GitHub granskar varje natt imagen (Trivy), Python-paketen (pip-audit) och koden (CodeQL) och
+  öppnar ett ärende vid fynd. Dependabot föreslår uppdateringar varje vecka.
+
 ## Inställningar (`.env`)
 
 | Variabel | Standard | Betydelse |
@@ -65,6 +81,9 @@ och verktyg som `curl` räknas inte. IP-adressen läses från `CF-Connecting-IP`
 | `INITIAL_TRAINS` | `620` | Tåg som bevakas vid allra första start |
 | `POLL_INTERVAL_SECONDS` | `300` | Hur ofta Trafikverket tillfrågas |
 | `DELAY_THRESHOLD_MIN` | `5` | Gräns för "försenat", i minuter |
+| `BIND_ADDRESS` | `0.0.0.0` | Vilket nätverkskort porten öppnas på (`127.0.0.1` = bara värden) |
+| `TRUSTED_PROXIES` | `private` | Vem som får ange besökarens IP: `private`, `none` eller nät som `172.18.0.0/16` |
+| `API_RATE_LIMIT_PER_MINUTE` | `120` | Högsta antal API-anrop per IP och minut |
 
 Dashboarden är öppen för alla som når porten; bara `/admin` kräver lösenord. Lösenordet skickas
 okrypterat över vanlig http, så kör appen bara på ett nät du litar på.

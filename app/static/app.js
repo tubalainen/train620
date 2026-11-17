@@ -800,8 +800,8 @@ function renderSync(d) {
   } else {
     text.textContent = "Ingen hämtning har lyckats ännu";
   }
-  text.classList.toggle("err", Boolean(d.last_error));
-  if (d.last_error) text.textContent += " – senaste försöket misslyckades";
+  text.classList.toggle("err", Boolean(d.fetch_error));
+  if (d.fetch_error) text.textContent += " – senaste försöket misslyckades";
   $("foot").textContent = `Tågkoll ${d.version === "dev" ? "(utvecklingsversion)" : "v" + d.version}. Trafikverket tillfrågas var ${Math.round(d.poll_seconds / 60)}:e minut. Ett tåg räknas som försenat när det ankommer slutstationen mer än ${d.threshold} minuter efter tidtabell.`;
 }
 

@@ -2,6 +2,21 @@
 
 Varje release får ett avsnitt `## [x.y.z] - ÅÅÅÅ-MM-DD`. Avsnittet blir releasetexten på GitHub.
 
+## [2.3.0] - 2026-11-17
+
+Säkerhetsrelease. **Du behöver logga in på adminsidan igen** efter uppgraderingen. Inga andra manuella åtgärder krävs.
+
+- **Uppdaterade Python-paket.** Den tidigare versionen av Starlette (0.41.3) hade åtta kända säkerhetshål. Nu används FastAPI 0.163.1, Starlette 1.10.0 och Uvicorn 0.54.0, som inte har några kända hål.
+- **Skydd mot lösenordsgissning.** Efter 5 felaktiga lösenord från samma IP-adress spärras inloggningen i 15 minuter, och efter 50 fel totalt per timme spärras den för alla.
+- **Säkrare inloggning.** Sessionen är en slumpad kod som servern kan återkalla. Utloggning avslutar sessionen på riktigt, och byte av `ADMIN_PASSWORD` loggar ut alla. En inloggning gäller i 12 timmar i stället för 7 dagar. Kakan markeras `Secure` när sidan nås via https.
+- **Säkerhetsrubriker** på alla svar: Content-Security-Policy, skydd mot inbäddning i andra sidor (clickjacking), `nosniff`, `Referrer-Policy`, `Permissions-Policy` och HSTS via https. Rubriken som avslöjar servertyp skickas inte längre.
+- **Skydd mot överbelastning.** Högst 120 API-anrop per minut och IP-adress (`API_RATE_LIMIT_PER_MINUTE`), högst 3 MB per anrop och kontroll av alla parametrar. Statistiken cachas mellan hämtningarna.
+- **Skydd mot förfalskade anrop från andra webbplatser (CSRF)** utöver den tidigare kakinställningen.
+- **Rubriker med besökarens IP-adress** (`X-Forwarded-For`, `CF-Connecting-IP`) godtas bara från en betrodd proxy (`TRUSTED_PROXIES`, standard: privata nät). Det går inte längre att förfalska besöksräknaren eller kringgå spärrarna med påhittade rubriker direkt mot porten.
+- **Felmeddelanden från hämtningen** visas bara för inloggad admin, inte längre för alla i `/api/health`.
+- **Härdad container** i `docker-compose.yml`: skrivskyddat filsystem, inga Linux-rättigheter, ingen rättighetshöjning, och tak för minne och processer. Med `BIND_ADDRESS=127.0.0.1` nås appen bara från servern själv. Ta in den nya `docker-compose.yml` för att få härdningen.
+- **Daglig säkerhetskontroll på GitHub.** Den granskar imagen (Trivy), Python-paketen (pip-audit) och koden (CodeQL) och öppnar ett ärende vid fynd. Dependabot föreslår uppdateringar varje vecka. Imagen har nu SBOM och byggintyg.
+
 ## [2.2.0] - 2026-11-17
 
 - Nytt: **antal besökare i dag** visas uppe till höger på dashboarden. Varje besökare räknas en gång per dag, helt anonymt och utan kakor. Räkningen använder en engångskod av IP-adress och webbläsare, blandad med ett slumpvärde som byts varje natt. IP-adressen sparas aldrig, och koderna raderas när dygnet är slut. Robotar räknas inte.

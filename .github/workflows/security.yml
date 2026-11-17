@@ -1,10 +1,15 @@
 name: Security
 
-# Daglig kontroll av kända säkerhetshål i imagen (operativsystem och Python-paket).
-# Hittas allvarliga hål med tillgänglig rättning misslyckas jobbet och ett ärende öppnas.
+# Daglig kontroll av kända säkerhetshål:
+#  1. Trivy granskar den släppta imagen (operativsystem och alla installerade paket).
+#  2. pip-audit granskar Python-beroendena i requirements.txt mot PyPI:s sårbarhetsdatabas.
+# Körs varje natt, efter varje ändring på main (t.ex. en release) och när den startas för hand.
+# Hittas allvarliga hål misslyckas jobbet och ett ärende öppnas; ärendet stängs när allt är rent.
 on:
   schedule:
     - cron: "17 4 * * *"
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -12,17 +17,21 @@ permissions:
   packages: read
   issues: write
 
+concurrency:
+  group: security
+  cancel-in-progress: false
+
 env:
   RELEASED_IMAGE: ghcr.io/${{ github.repository }}:latest
-  ISSUE_TITLE: Säkerhetshål i Tågkoll-imagen
+  ISSUE_TITLE: Säkerhetshål i Tågkoll
 
 jobs:
   scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -39,10 +48,10 @@ jobs:
             echo "ref=tagkoll:scan" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Sök säkerhetshål med Trivy
+      - name: Sök säkerhetshål i imagen med Trivy
         id: trivy
         continue-on-error: true
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ steps.image.outputs.ref }}
           severity: HIGH,CRITICAL
@@ -51,25 +60,43 @@ jobs:
           format: table
           output: trivy-report.txt
 
+      - name: Sök säkerhetshål i Python-beroendena med pip-audit
+        id: pipaudit
+        continue-on-error: true
+        run: |
+          python3 -m pip install --quiet pip-audit
+          set -o pipefail
+          pip-audit --requirement requirements.txt --strict --progress-spinner off --desc on 2>&1 | tee pip-audit-report.txt
+
       - name: Visa rapport
-        run: cat trivy-report.txt >> "$GITHUB_STEP_SUMMARY"; cat trivy-report.txt
+        if: always()
+        run: |
+          {
+            echo "## Trivy (image)"; echo '```'; cat trivy-report.txt 2>/dev/null || echo "ingen rapport"; echo '```'
+            echo "## pip-audit (requirements.txt)"; echo '```'; cat pip-audit-report.txt 2>/dev/null || echo "ingen rapport"; echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Öppna eller uppdatera ärende
-        if: steps.trivy.outcome == 'failure'
+        if: steps.trivy.outcome == 'failure' || steps.pipaudit.outcome == 'failure'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           IMAGE: ${{ steps.image.outputs.ref }}
+          TRIVY: ${{ steps.trivy.outcome }}
+          PIPAUDIT: ${{ steps.pipaudit.outcome }}
         run: |
           {
-            echo "Den dagliga säkerhetskontrollen hittade allvarliga säkerhetshål (HIGH/CRITICAL) som har en rättning."
+            echo "Den dagliga säkerhetskontrollen hittade kända säkerhetshål."
             echo
-            echo "Image: \`$IMAGE\` · Körning: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo "- Trivy (image \`$IMAGE\`, HIGH/CRITICAL med rättning): **$TRIVY**"
+            echo "- pip-audit (requirements.txt): **$PIPAUDIT**"
             echo
-            echo "En ny release bygger om imagen med uppdaterad basimage. Hål i Python-paket rättas genom att höja versionen i \`requirements.txt\`."
+            echo "Körning: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
             echo
-            echo '```'
-            head -c 55000 trivy-report.txt
-            echo '```'
+            echo "Rättning: höj versionen i \`requirements.txt\` för sårbara Python-paket och gör en ny release."
+            echo "En ny release bygger också om imagen med uppdaterad basimage."
+            echo
+            echo "### Trivy"; echo '```'; head -c 30000 trivy-report.txt 2>/dev/null; echo '```'
+            echo "### pip-audit"; echo '```'; head -c 20000 pip-audit-report.txt 2>/dev/null; echo '```'
           } > issue.md
           number="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title \"$ISSUE_TITLE\"" --json number --jq '.[0].number // empty')"
           if [[ -n "$number" ]]; then
@@ -78,16 +105,16 @@ jobs:
             gh issue create --repo "$GITHUB_REPOSITORY" --title "$ISSUE_TITLE" --body-file issue.md
           fi
 
-      - name: Stäng ärendet när imagen är ren
-        if: steps.trivy.outcome == 'success'
+      - name: Stäng ärendet när allt är rent
+        if: steps.trivy.outcome == 'success' && steps.pipaudit.outcome == 'success'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           number="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title \"$ISSUE_TITLE\"" --json number --jq '.[0].number // empty')"
           if [[ -n "$number" ]]; then
-            gh issue close "$number" --repo "$GITHUB_REPOSITORY" --comment "Dagens kontroll hittade inga allvarliga säkerhetshål med rättning."
+            gh issue close "$number" --repo "$GITHUB_REPOSITORY" --comment "Dagens kontroll hittade inga kända säkerhetshål."
           fi
 
       - name: Misslyckas om säkerhetshål hittades
-        if: steps.trivy.outcome == 'failure'
+        if: steps.trivy.outcome == 'failure' || steps.pipaudit.outcome == 'failure'
         run: exit 1

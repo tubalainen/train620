@@ -5,10 +5,23 @@ services:
     container_name: tagkoll
     restart: unless-stopped
     ports:
-      - "${PORT:-8843}:8843"
+      # BIND_ADDRESS=127.0.0.1 i .env gör appen nåbar bara från servern själv (rekommenderat
+      # om proxyn kör på samma värd). Standard är alla nätverkskort, som tidigare.
+      - "${BIND_ADDRESS:-0.0.0.0}:${PORT:-8843}:8843"
     env_file: .env
     volumes:
       - tagkoll-data:/data
+    # Härdning: skrivskyddat filsystem (utom /data och /tmp), inga Linux-rättigheter,
+    # ingen rättighetshöjning och tak för minne och processer.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    pids_limit: 200
 
 volumes:
   tagkoll-data:

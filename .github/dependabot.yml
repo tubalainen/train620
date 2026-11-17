@@ -1,0 +1,23 @@
+# Dependabot öppnar pull requests när det finns nyare versioner av Python-paket, basimagen och
+# GitHub Actions (som är låsta till commit-SHA). Varje sådan PR går igenom Build som vanligt och
+# blir en release först när användaren godkänner den.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      python:
+        patterns: ["*"]
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
