@@ -3,7 +3,7 @@
 Överlämning mellan chattsessioner. Läs den här filen och `CLAUDE.md` först i en ny session,
 och uppdatera filen när något viktigt ändras (via PR, utan versionshöjning).
 
-*Senast uppdaterad: 2026-11-17, efter release v2.1.0 (linjevy), inför v2.1.1.*
+*Senast uppdaterad: 2026-11-17, efter release v2.1.1.*
 
 ## Vad Tågkoll är
 
@@ -93,8 +93,10 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
 - **v2.1.0** (2026-11-17): linjevy, `delay_segments`/`track_sections`, datans ålder, spår i admin.
   Release-körningen och `docker pull` utan inloggning kontrollerade. Användaren har uppgraderat
   på totoro; en skärmbild visade linjen för 620 med riktiga data.
-- **v2.1.1**: framkomna tåg visas vid slutstationen (användaren tyckte att läget vid planerad
-  ankomst var förvirrande; uppspelningen gillades).
+- **v2.1.1** (2026-11-17): framkomna tåg visas vid slutstationen (användaren tyckte att läget
+  vid planerad ankomst var förvirrande; uppspelningen gillades). Release-körningen gick igenom
+  och `docker pull` av `2.1.1` och `latest` fungerar utan inloggning. `latest` pekade på den
+  gamla versionen några sekunder in i körningen – vänta tills *Release* är klar innan kontroll.
 
 ## Användarens preferenser
 
