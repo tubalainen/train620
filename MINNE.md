@@ -3,7 +3,7 @@
 Överlämning mellan chattsessioner. Läs den här filen och `CLAUDE.md` först i en ny session,
 och uppdatera filen när något viktigt ändras (via PR, utan versionshöjning).
 
-*Senast uppdaterad: 2026-11-17, inför release v2.1.0 (linjevy).*
+*Senast uppdaterad: 2026-11-17, efter release v2.1.0 (linjevy), inför v2.1.1.*
 
 ## Vad Tågkoll är
 
@@ -13,7 +13,8 @@ Karlstad C, SJ Snabbtåg) bevakas.
 
 - **Dashboard `/`:** äldsta datapunkt per tåg, linjevy (ånglok + spöktåg enligt tidtabell,
   enkel/dubbelspår, färgade förseningssträckor, uppspelning, utfällbar "Var uppstod
-  förseningen?"), punktlighet, försenade/inställda, medelförsening, försening per avgång,
+  förseningen?"; ett framkommet tåg står vid slutstationen, pågående visas nu-läget,
+  inställda/delvis inställda står kvar där de stannade), punktlighet, försenade/inställda, medelförsening, försening per avgång,
   vecka, veckodag och station, samt tabell med alla avgångar (utfällbar per station).
 - **Admin `/admin`:** lösenordsskyddad (`ADMIN_PASSWORD`). Lägga till/ta bort tåg, *Uppdatera
   nu*, CSV-import av historik (filval, drag-och-släpp, inklistring) och *Radera allt och börja om*.
@@ -87,6 +88,14 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
 - Historiken ska **inte** byggas in i repot eller imagen (användarens beslut). Lokala filer
   ligger i `historik/`, som är undantagen i `.gitignore`.
 
+## Releaser
+
+- **v2.1.0** (2026-11-17): linjevy, `delay_segments`/`track_sections`, datans ålder, spår i admin.
+  Release-körningen och `docker pull` utan inloggning kontrollerade. Användaren har uppgraderat
+  på totoro och linjen fungerar med riktiga data (620 och 643).
+- **v2.1.1**: framkomna tåg visas vid slutstationen (användaren tyckte att läget vid planerad
+  ankomst var förvirrande; uppspelningen gillades).
+
 ## Användarens preferenser
 
 - Svenska i allt som användaren ser.
@@ -97,6 +106,10 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
   ett test faktiskt svarade).
 
 ## Öppna punkter
+
+- Spårdata i `DEFAULT_LINES` behöver kontrolleras mot verkligheten. Användaren rättar via
+  adminsidan (*Spår på sträckorna*); i användarens skärmbild var Degerfors–Laxå "okänt"
+  (passager mellan dem som inte gick att placera).
 
 - **Säkerhetskontrollen har aldrig körts.** Den skulle ha gått 2026-11-17 04:17 UTC men det
   finns inga körningar. Kontrollera att standardgrenen är `main`, och starta den manuellt
