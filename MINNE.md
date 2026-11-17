@@ -3,7 +3,7 @@
 Överlämning mellan chattsessioner. Läs den här filen och `CLAUDE.md` först i en ny session,
 och uppdatera filen när något viktigt ändras (direkt till `main`, utan PR och release).
 
-*Senast uppdaterad: 2026-11-17, efter release v2.5.1.*
+*Senast uppdaterad: 2026-11-17, efter release v2.5.2.*
 
 ## Vad Tågkoll är
 
@@ -100,6 +100,13 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
 
 ## Releaser
 
+- **v2.5.2** (2026-11-17), släppt och kontrollerad (PR #26, Release #19, `docker pull` av `2.5.2` och
+  `latest` utan inloggning, samma image, `locoColor` finns i `/srv/app/static/app.js`): ångloket ryker
+  bara när det rullar mellan två olika punkter (`positionAt` ger `moving`; uppehåll på station, före
+  avgång, framme och inställt = ingen rök). Lokets färg efter `r.delay` (`locoColor`): grön ≤1 min →
+  orange (`--late`) vid 6 min → röd (`--critical`) från 20 min; inställt behåller `--ink`. Gränserna
+  valde Claude själv – användaren har inte kommenterat dem. Testat med testdatabas för 620 (ej 643).
+  Användaren har inte uppgraderat totoro eller bekräftat 2.5.2 än.
 - **v2.5.1** (2026-11-17), släppt och kontrollerad (PR #25, Release #18, `docker pull` av `2.5.1` och
   `latest` utan inloggning, samma image): *I dag* visar "Har avgått" + avgångstid och om den var i
   tid (`actual_departure`, `departure_delay`, `last_station`). Användarens skärmbild före 2.5.1 visade
