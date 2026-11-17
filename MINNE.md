@@ -3,7 +3,7 @@
 Överlämning mellan chattsessioner. Läs den här filen och `CLAUDE.md` först i en ny session,
 och uppdatera filen när något viktigt ändras (via PR, utan versionshöjning).
 
-*Senast uppdaterad: 2026-11-17, efter release v2.1.3, inför v2.1.4.*
+*Senast uppdaterad: 2026-11-17, efter release v2.1.4, inför v2.1.5.*
 
 ## Vad Tågkoll är
 
@@ -100,7 +100,8 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
 - **v2.1.2** (2026-11-17): tolerantare stationsnamn, knutpunktsregel (Laxå) för luckor mellan
   banor, inbyggda spårrader räknas om vid varje hämtning. Release och `docker pull` kontrollerade.
 - **v2.1.3** (2026-11-17): dubbelspår Karlstad C–Väse – blev fel, användaren tog tillbaka det.
-- **v2.1.4**: dubbelspår Karlstad C–Skattkärr, enkelspår Skattkärr–Laxå (samma som 2.1.2).
+- **v2.1.4** (2026-11-17): dubbelspår Karlstad C–Skattkärr, enkelspår Skattkärr–Laxå.
+- **v2.1.5**: Svartå med i Värmlandsbanan och enkelspår Svartå–Hasselfors.
 
 ## Användarens preferenser
 
@@ -114,7 +115,11 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
 ## Öppna punkter
 
 - Spårdata enligt användaren (slutligt besked): dubbelspår Karlstad C–Skattkärr, enkelspår
-  Skattkärr–Laxå ("inget annat"), Laxå–Stockholm stambana med dubbelspår. Orsaken till att en bit
+  Skattkärr–Laxå ("inget annat"), Laxå–Stockholm stambana med dubbelspår.
+- **620 passerar inte Laxå** utan kör Degerfors–Svartå–Hasselfors (syns i användarens
+  skärmbild). Svartå–Hasselfors räknas som enkelspår (anslutning till stambanan, ej bekräftat
+  separat av användaren). Blanda inte ihop Svartå och Laxå. Knutpunktsregeln i
+  `guess_section` gav dubbelspår där i 2.1.2–2.1.4. Orsaken till att en bit
   efter Degerfors visades som "okänt" i 2.1.0 är inte bekräftad (troligen ett stationsnamn som
   inte matchade); 2.1.2 jämför namn tolerantare och fyller luckor mellan två banor via
   knutpunkten (Laxå). Be användaren bekräfta att inget står som okänt efter uppgraderingen.
