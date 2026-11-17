@@ -3,7 +3,7 @@
 Överlämning mellan chattsessioner. Läs den här filen och `CLAUDE.md` först i en ny session,
 och uppdatera filen när något viktigt ändras (via PR, utan versionshöjning).
 
-*Senast uppdaterad: 2026-11-17, efter release v2.1.4, inför v2.1.5.*
+*Senast uppdaterad: 2026-11-17, efter release v2.1.5.*
 
 ## Vad Tågkoll är
 
@@ -101,7 +101,26 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
   banor, inbyggda spårrader räknas om vid varje hämtning. Release och `docker pull` kontrollerade.
 - **v2.1.3** (2026-11-17): dubbelspår Karlstad C–Väse – blev fel, användaren tog tillbaka det.
 - **v2.1.4** (2026-11-17): dubbelspår Karlstad C–Skattkärr, enkelspår Skattkärr–Laxå.
-- **v2.1.5**: Svartå med i Värmlandsbanan, sträckor förbi Laxå delas vid Laxå, rättad statustext för pågående tåg.
+- **v2.1.5** (2026-11-17): Svartå med i Värmlandsbanan, sträckor förbi Laxå delas vid Laxå,
+  rättad statustext för pågående tåg (beskrev läget vid planerad ankomst sedan 2.1.1).
+  Release-körningen och `docker pull` av `2.1.5` och `latest` utan inloggning kontrollerade.
+  Användaren har inte bekräftat linjen med riktiga data efter 2.1.5.
+
+## Spårdata
+
+Användarens slutliga besked (efter flera rundor 2.1.2–2.1.5):
+
+- Karlstad C–Skattkärr **dubbelspår**, Skattkärr–Laxå **enkelspår** ("inget annat"),
+  Laxå–Stockholm C **dubbelspår** (Västra stambanan). 643 är samma sträcka spegelvänd;
+  spårdata är riktningsoberoende (`pair_key`).
+- Trafikverket rapporterar inte alltid Laxå: i 620:s data kommer Hasselfors direkt efter
+  Svartå. `guess_section` delar då sträckan vid Laxå (`split` i segmentet: enkelspår före,
+  dubbelspår efter, läget uppskattat efter antal stationer). Användaren valde den lösningen.
+  Svartå ligger på Värmlandsbanan före Laxå – blanda inte ihop dem.
+- Inbyggda rader i `track_sections` skrivs om vid varje hämtning; rader med `source='admin'`
+  rörs inte. Ändringar användaren gjort på adminsidan går före de inbyggda.
+- **Lärdom:** gissa inte järnvägsgeografi. Fråga användaren innan spårdata ändras, och utgå
+  från stationsordningen i tågets egna data.
 
 ## Användarens preferenser
 
@@ -114,21 +133,12 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
 
 ## Öppna punkter
 
-- Spårdata enligt användaren (slutligt besked): dubbelspår Karlstad C–Skattkärr, enkelspår
-  Skattkärr–Laxå ("inget annat"), Laxå–Stockholm stambana med dubbelspår.
-- **Trafikverket rapporterar inte alltid Laxå**: i 620:s data kommer Hasselfors direkt efter
-  Svartå. Sträckan delas då vid Laxå (`split` i segmentet: enkelspår före, dubbelspår efter),
-  som användaren valde. Svartå ligger på Värmlandsbanan före Laxå. 643 är samma sträcka
-  spegelvänd; spårdata är riktningsoberoende. Knutpunktsregeln i `guess_section` gav
-  dubbelspår på Svartå–Hasselfors i 2.1.2–2.1.4.
-- Orsaken till att en bit
-  efter Degerfors visades som "okänt" i 2.1.0 är inte bekräftad (troligen ett stationsnamn som
-  inte matchade); 2.1.2 jämför namn tolerantare och fyller luckor mellan två banor via
-  knutpunkten (Laxå). Be användaren bekräfta att inget står som okänt efter uppgraderingen.
-- Inbyggda rader i `track_sections` skrivs om vid varje hämtning; rader med `source='admin'`
-  rörs inte.
-
+- Användaren har inte bekräftat 2.1.5 med riktiga data. Fråga om linjen ser rätt ut för både
+  620 och 643, och om inget står som "Okänt" under *Spår på sträckorna* på /admin.
+- Det är okänt varför en bit efter Degerfors visades som "okänt" i 2.1.0 (troligen ett
+  stationsnamn som inte matchade). 2.1.2 och senare täcker det med tolerantare namn och
+  knutpunktsregeln.
 - **Säkerhetskontrollen har aldrig körts.** Den skulle ha gått 2026-11-17 04:17 UTC men det
-  finns inga körningar. Kontrollera att standardgrenen är `main`, och starta den manuellt
-  (Actions → Security → Run workflow) för att se att den fungerar.
+  finns fortfarande inga körningar (kontrollerat efter 2.1.5). Kontrollera att standardgrenen
+  är `main`, och starta den manuellt (Actions → Security → Run workflow).
 - Version 2.0.0 blev major innan versionsregeln fanns; numreringen fortsätter därifrån.
