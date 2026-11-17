@@ -2,6 +2,13 @@
 
 Varje release får ett avsnitt `## [x.y.z] - ÅÅÅÅ-MM-DD`. Avsnittet blir releasetexten på GitHub.
 
+## [2.5.0] - 2026-11-17
+
+- Nytt: **Kommande avgångar.** Tågkoll hämtar nu avgångar upp till 7 dagar framåt, så långt Trafikverket har publicerat dem. En avgång som ställs in i förväg, till exempel på grund av banarbete, syns därför direkt i rutan *Kommande avgångar* under *I dag*, med Trafikverkets orsak när den finns. Tidigare syntes en inställning först från midnatt samma dag.
+- Nytt: **prognos före avgång.** Om Trafikverket redan före avgång räknar med att tåget blir sent visas det som *Väntas bli försenat*, med väntad avgångstid och beräknad ankomst. Prognosen visas i *I dag*, i *Kommande avgångar* och på linjen.
+- Kommande avgångar räknas inte in i statistiken förrän deras dag har kommit. En avgång som redan är inställd nästa vecka sänker alltså inte punktligheten i dag.
+- I dag och vid inställda avgångar visas Trafikverkets orsak (t.ex. "Banarbete") när den finns.
+
 ## [2.4.0] - 2026-11-17
 
 - Nytt: **spela upp äldre avgångar.** På linjekortet finns en väljare med alla avgångar som Tågkoll har samlat in från Trafikverket, oavsett vald period. Välj en avgång och tryck *Spela upp resan* för att se hur tåget gick och var förseningen uppstod. Varje avgång i listan visas med datum och utfall, till exempel "+13 min" eller "inställt".
