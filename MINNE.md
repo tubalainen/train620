@@ -3,7 +3,7 @@
 Överlämning mellan chattsessioner. Läs den här filen och `CLAUDE.md` först i en ny session,
 och uppdatera filen när något viktigt ändras (via PR, utan versionshöjning).
 
-*Senast uppdaterad: 2026-11-17, efter release v2.1.6.*
+*Senast uppdaterad: 2026-11-17, efter release v2.1.6, inför v2.2.0.*
 
 ## Vad Tågkoll är
 
@@ -35,7 +35,8 @@ Karlstad C, SJ Snabbtåg) bevakas.
 
 SQLite-tabeller: `trains`, `announcements` (alla hållplatslägen från Trafikverket),
 `imported_journeys` (CSV-import, används bara för dagar utan egna data), `stations`, `meta`,
-`delay_segments` (var förseningen uppstod per delsträcka/uppehåll, räknas om efter varje
+`visits` (anonyma besökare: sha256(dygnssalt|ip|UA), saltet i `meta` byts och gamla rader
+raderas vid dygnsbyte – inga IP-adresser sparas), `delay_segments` (var förseningen uppstod per delsträcka/uppehåll, räknas om efter varje
 hämtning) och `track_sections` (antal spår per sträcka; `inbyggd` från `DEFAULT_LINES` eller
 `admin` när användaren rättat). Nya tabeller skapas automatiskt vid start.
 
@@ -111,6 +112,9 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
   kontrollerade; rättelsen finns i imagen. Användaren var (med rätta) irriterad: **testa alltid
   båda tågen/riktningarna** (t.ex. en spegelvänd kopia av 620 som 643 i en testdatabas) innan
   release.
+- **v2.2.0**: besökare i dag uppe till höger (`/api/visitors`, räknas bara vid sidladdning av
+  `/`, inte admin/API/robotar) och avsnittet *Kakor och integritet* i sidfoten, inklusive
+  Cloudflare (användarens val). Dashboarden ska fortsätta vara helt utan kakor.
 
 ## Spårdata
 

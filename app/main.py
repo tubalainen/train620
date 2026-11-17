@@ -13,6 +13,7 @@ import json
 import logging
 import os
 import re
+import secrets
 import sqlite3
 import statistics
 import threading
@@ -95,6 +96,11 @@ CREATE TABLE IF NOT EXISTS track_sections (
     line TEXT,
     source TEXT NOT NULL,
     PRIMARY KEY (from_sig, to_sig)
+);
+CREATE TABLE IF NOT EXISTS visits (
+    day TEXT NOT NULL,
+    visitor TEXT NOT NULL,
+    PRIMARY KEY (day, visitor)
 );
 CREATE TABLE IF NOT EXISTS delay_segments (
     train_ident TEXT NOT NULL,
@@ -971,9 +977,56 @@ def html_page(name: str) -> HTMLResponse:
     return HTMLResponse(text, headers={"Cache-Control": "no-cache"})
 
 
+# ------------------------------------------------------------------ besökare
+# Unika besökare per dag utan kakor: en hash av IP-adress och webbläsare med ett slumpat salt
+# som byts varje dygn. IP-adressen sparas aldrig, och när dygnet byts raderas både saltet och
+# gårdagens hashar, så att inget kan kopplas till en person eller mellan dagar.
+BOT_RE = re.compile(r"bot|crawl|spider|slurp|preview|monitor|curl|wget|python|headless|httpclient|scan", re.I)
+visit_lock = threading.Lock()
+
+
+def client_ip(request: Request) -> str:
+    ip = request.headers.get("cf-connecting-ip") or request.headers.get("x-forwarded-for", "").split(",")[0]
+    return ip.strip() or (request.client.host if request.client else "")
+
+
+def visit_salt(conn: sqlite3.Connection, today: str) -> str:
+    rows = dict(conn.execute("SELECT key, value FROM meta WHERE key IN ('visit_salt', 'visit_salt_day')").fetchall())
+    if rows.get("visit_salt_day") == today and rows.get("visit_salt"):
+        return rows["visit_salt"]
+    salt = secrets.token_hex(16)
+    conn.execute("DELETE FROM visits WHERE day <> ?", (today,))
+    conn.executemany("INSERT INTO meta VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                     [("visit_salt", salt), ("visit_salt_day", today)])
+    return salt
+
+
+def record_visit(request: Request) -> None:
+    agent = request.headers.get("user-agent", "")
+    if not agent or BOT_RE.search(agent):
+        return
+    today = datetime.now(TZ).date().isoformat()
+    try:
+        with visit_lock, db() as conn:
+            salt = visit_salt(conn, today)
+            visitor = hashlib.sha256(f"{salt}|{client_ip(request)}|{agent}".encode()).hexdigest()
+            conn.execute("INSERT OR IGNORE INTO visits VALUES (?, ?)", (today, visitor))
+    except sqlite3.Error:
+        log.exception("Kunde inte räkna besöket")  # räknaren får aldrig stoppa sidan
+
+
+@app.get("/api/visitors")
+def visitors():
+    today = datetime.now(TZ).date().isoformat()
+    with db() as conn:
+        n = conn.execute("SELECT COUNT(*) FROM visits WHERE day = ?", (today,)).fetchone()[0]
+    return {"today": n}
+
+
 @app.get("/", include_in_schema=False)
 @app.get("/index.html", include_in_schema=False)
-def index_page():
+def index_page(request: Request):
+    record_visit(request)
     return html_page("index.html")
 
 

@@ -163,6 +163,13 @@ tr.stops td td { background: none; padding: 5px 12px 5px 0; }
 code { font-family: ui-monospace, monospace; font-size: 12.5px; background: var(--wash); padding: 1px 5px; border-radius: 4px; }
 
 footer { padding-top: 22px; padding-bottom: 40px; color: var(--muted); font-size: 12.5px; }
+footer p + p, footer .privacy { margin-top: 8px; }
+footer .privacy { border-top: 1px solid var(--border); padding-top: 14px; margin-top: 16px; }
+footer .privacy h2 { font-size: 13px; font-weight: 600; color: var(--ink-2); margin: 0 0 6px; }
+footer .privacy ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; max-width: 760px; }
+.sync { flex-wrap: wrap; }
+.visitors { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.visitors[hidden] { display: none; }
 
 .tooltip { position: fixed; z-index: 10; pointer-events: none; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.16); padding: 8px 11px; font-size: 13px; max-width: 260px; }
 .tooltip .t-val { font-weight: 650; font-size: 15px; display: flex; align-items: center; gap: 7px; }
