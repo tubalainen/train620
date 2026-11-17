@@ -92,7 +92,7 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
 
 - **v2.1.0** (2026-11-17): linjevy, `delay_segments`/`track_sections`, datans ålder, spår i admin.
   Release-körningen och `docker pull` utan inloggning kontrollerade. Användaren har uppgraderat
-  på totoro och linjen fungerar med riktiga data (620 och 643).
+  på totoro; en skärmbild visade linjen för 620 med riktiga data.
 - **v2.1.1**: framkomna tåg visas vid slutstationen (användaren tyckte att läget vid planerad
   ankomst var förvirrande; uppspelningen gillades).
 
