@@ -3,7 +3,7 @@
 Överlämning mellan chattsessioner. Läs den här filen och `CLAUDE.md` först i en ny session,
 och uppdatera filen när något viktigt ändras (via PR, utan versionshöjning).
 
-*Senast uppdaterad: 2026-11-17, efter release v2.3.0, inför v2.3.1.*
+*Senast uppdaterad: 2026-11-17, efter release v2.3.1.*
 
 ## Vad Tågkoll är
 
@@ -115,7 +115,14 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
   kontrollerade; rättelsen finns i imagen. Användaren var (med rätta) irriterad: **testa alltid
   båda tågen/riktningarna** (t.ex. en spegelvänd kopia av 620 som 643 i en testdatabas) innan
   release.
-- **v2.3.1**: första Security-körningen (vid mergen av 2.3.0) granskade gamla 2.2.0-imagen och
+- **Dependabot 2026-11-17:** #20 (8 Actions till nya major-versioner: checkout v7, build-push v7,
+  setup-buildx/qemu v4, login v4, metadata v6, codeql v4) mergad utan release. #19 (basimage
+  Python 3.13→3.15) stängd: en Python-uppgradering ska vara en egen release, och Dockerfile tar
+  bort `/usr/local/lib/python3.13/ensurepip/_bundled` – den sökvägen måste göras
+  versionsoberoende först. Inga öppna PR:er efter städningen.
+- **v2.3.1** (2026-11-17), släppt och kontrollerad: `docker pull` av 2.3.1 och `latest` utan
+  inloggning, lokal Trivy 0 sårbarheter, Security (via `workflow_run` efter Release) grön och
+  stängde ärende #18 automatiskt. Bakgrund: första Security-körningen (vid mergen av 2.3.0) granskade gamla 2.2.0-imagen och
   öppnade ärende #18. Kvar i 2.3.0 enligt lokal Trivy: zlib1g (Debian) och setuptools 70.3.0 –
   den senare är *pips egna medföljande paket* (pip/_vendor), inte appens. Rättat: `apt-get
   upgrade` i Dockerfile och pip avinstalleras efter installationen (pip behövs inte i drift).
@@ -166,9 +173,11 @@ Användarens slutliga besked (efter flera rundor 2.1.2–2.1.5):
 - Det är okänt varför en bit efter Degerfors visades som "okänt" i 2.1.0 (troligen ett
   stationsnamn som inte matchade). 2.1.2 och senare täcker det med tolerantare namn och
   knutpunktsregeln.
-- Säkerhetskontrollen körde första gången 2026-11-17 (rött på grund av gamla imagen, ärende
-  #18). Kontrollera efter 2.3.1 att *Security* blir grön och stänger #18, och att nattkörningen
-  04:17 UTC faktiskt sker.
+- *Security* är grön sedan 2.3.1. Kontrollera att nattkörningen 04:17 UTC faktiskt sker (den
+  uteblev före 2.3.0).
+- Release-arbetsflödets nya Actions-versioner från Dependabot #20 (build-push v7, metadata v6,
+  login v4, qemu v4) har inte körts vid en riktig release än. Kontrollera nästa release noga.
+- Vid en framtida Python-uppgradering: gör Dockerfile:s ensurepip-sökväg versionsoberoende.
 - Rekommenderat till användaren (görs i Cloudflare, inte i koden): Cloudflare Access för
   `/admin*` och `/api/admin*`, och en Rate Limiting-regel för `/api/*`. Ej bekräftat gjort.
 - Login-spärren per IP går att kringgå av den som når proxyn förbi Cloudflare och förfalskar
