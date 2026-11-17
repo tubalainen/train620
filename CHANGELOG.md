@@ -2,6 +2,11 @@
 
 Varje release får ett avsnitt `## [x.y.z] - ÅÅÅÅ-MM-DD`. Avsnittet blir releasetexten på GitHub.
 
+## [2.5.2] - 2026-11-17
+
+- Ångloket på linjen ryker bara när tåget rullar. När det står still – på en station, före avgång, framme vid slutstationen eller efter en inställning – kommer ingen rök ur skorstenen.
+- Lokets färg visar förseningen: grönt när tåget är i tid, sedan via orange (runt 5 min sent) mot rött när det är 20 minuter eller mer sent. Färgen följer förseningen under uppspelningen. Ett inställt tåg är som förut svart (vitt i mörkt läge).
+
 ## [2.5.1] - 2026-11-17
 
 - Tydligare när tåget har avgått: *I dag* visar **Har avgått** med en grön bock, eller en gul markering om tåget är mer än 5 minuter sent. Texten säger när tåget avgick och om det var i tid, till exempel "Avgick från Stockholm C 15:04, 2 min sent". Den säger också var tåget senast rapporterades och när det beräknas vara framme.

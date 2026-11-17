@@ -15,6 +15,7 @@
   --warning: #fab219;
   --serious: #ec835a;
   --critical: #d03b3b;
+  --late: #ef8a17;
   --neutral: #c3c2b7;
   --rail: #6f6e69;
   --steam: #a9a8a1;
@@ -249,21 +250,19 @@ footer .privacy ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; max
 .line-svg .cancel-sign text { fill: #fff; font-weight: 700; font-size: 11px; letter-spacing: 0.04em; }
 
 .loco .body rect, .loco .body path { fill: var(--ink); }
+.loco.real .body rect, .loco.real .body path { fill: var(--loco, var(--ink)); transition: fill 0.4s; }
 .loco .body .window { fill: var(--warning); }
+.loco.real .body .window { fill: #fff4cc; }
 .loco .wheel { fill: var(--surface); stroke: var(--ink); stroke-width: 2; }
 .loco .lamp { fill: var(--warning); }
 .loco.stopped .lamp { fill: var(--muted); }
 .loco.ghost .body rect, .loco.ghost .body path, .loco.ghost .wheel { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 3 2; }
 .loco.ghost .lamp, .loco.ghost .steam { display: none; }
-.loco.stopped .steam { display: none; }
-.puff { fill: var(--steam); opacity: 0; transform-box: fill-box; transform-origin: center; animation: puff 2.6s ease-out infinite; }
-.loco.moving .puff { animation-duration: 1.4s; }
-.puff:nth-child(2) { animation-delay: -0.65s; }
-.puff:nth-child(3) { animation-delay: -1.3s; }
-.puff:nth-child(4) { animation-delay: -1.95s; }
-.loco.moving .puff:nth-child(2) { animation-delay: -0.35s; }
-.loco.moving .puff:nth-child(3) { animation-delay: -0.7s; }
-.loco.moving .puff:nth-child(4) { animation-delay: -1.05s; }
+.loco:not(.moving) .steam { display: none; }
+.puff { fill: var(--steam); opacity: 0; transform-box: fill-box; transform-origin: center; animation: puff 1.4s ease-out infinite; }
+.puff:nth-child(2) { animation-delay: -0.35s; }
+.puff:nth-child(3) { animation-delay: -0.7s; }
+.puff:nth-child(4) { animation-delay: -1.05s; }
 @keyframes puff {
   0% { transform: translate(0, 0) scale(0.5); opacity: 0; }
   12% { opacity: 0.9; }
