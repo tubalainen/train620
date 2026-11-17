@@ -3,7 +3,7 @@
 Överlämning mellan chattsessioner. Läs den här filen och `CLAUDE.md` först i en ny session,
 och uppdatera filen när något viktigt ändras (via PR, utan versionshöjning).
 
-*Senast uppdaterad: 2026-11-17, efter release v2.1.6, inför v2.2.0.*
+*Senast uppdaterad: 2026-11-17, efter release v2.2.0, inför v2.3.0 (säkerhet).*
 
 ## Vad Tågkoll är
 
@@ -25,13 +25,16 @@ Karlstad C, SJ Snabbtåg) bevakas.
 
 | Fil | Innehåll |
 |---|---|
+| `app/security.py` | Betrodd proxy (`client_ip`, `is_https`), `RateLimiter`, `SecurityMiddleware` (rubriker, 3 MB-gräns, Origin-kontroll, API-gräns) |
 | `app/main.py` | FastAPI: insamling i bakgrundstråd (var 5:e min), SQLite, statistik, API, admin-inloggning |
 | `app/static/index.html`, `app.js` | Dashboard, egna SVG-diagram utan bibliotek |
 | `app/static/admin.html`, `admin.js` | Adminsidan |
 | `app/static/style.css` | Gemensam stil, ljust och mörkt läge |
 | `.github/workflows/build.yml` | Varje PR: bygg, provstart, nyckelkontroll, VERSION ↔ CHANGELOG |
 | `.github/workflows/release.yml` | Merge av ändrad `VERSION` till `main` → image till ghcr.io + GitHub-release |
-| `.github/workflows/security.yml` | Trivy varje natt 04:17 UTC, öppnar ärende vid fynd |
+| `.github/workflows/security.yml` | Varje natt 04:17 UTC + push till main: Trivy (image) och pip-audit (requirements), ärende vid fynd |
+| `.github/workflows/codeql.yml` | CodeQL (Python + JS) på PR, main och varje natt |
+| `.github/dependabot.yml` | Veckovisa uppdateringar: pip, Docker, Actions (Actions låsta till SHA) |
 
 SQLite-tabeller: `trains`, `announcements` (alla hållplatslägen från Trafikverket),
 `imported_journeys` (CSV-import, används bara för dagar utan egna data), `stations`, `meta`,
@@ -112,7 +115,13 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
   kontrollerade; rättelsen finns i imagen. Användaren var (med rätta) irriterad: **testa alltid
   båda tågen/riktningarna** (t.ex. en spegelvänd kopia av 620 som 643 i en testdatabas) innan
   release.
-- **v2.2.0**: besökare i dag uppe till höger (`/api/visitors`, räknas bara vid sidladdning av
+- **v2.3.0**: säkerhetsrelease efter granskning (se CHANGELOG). Viktigt för framtida ändringar:
+  uvicorn körs med `--no-proxy-headers` (annars skriver uvicorn om klientadressen och appens
+  egen proxykontroll kringgås); `_password_tag()` får inte anropas inne i en öppen
+  `db()`-transaktion (låser databasen); sessioner i tabellen `sessions`, hemligheten i
+  `meta.session_secret` (behålls vid "Radera allt"). Testskriptet låg i molnsessionens
+  scratchpad – skriv om liknande tester vid behov.
+- **v2.2.0** (2026-11-17), släppt och kontrollerad (`docker pull` utan inloggning): besökare i dag uppe till höger (`/api/visitors`, räknas bara vid sidladdning av
   `/`, inte admin/API/robotar) och avsnittet *Kakor och integritet* i sidfoten, inklusive
   Cloudflare (användarens val). Dashboarden ska fortsätta vara helt utan kakor.
 
@@ -143,12 +152,19 @@ Användarens slutliga besked (efter flera rundor 2.1.2–2.1.5):
 
 ## Öppna punkter
 
+- Besöksräknaren läser IP från `CF-Connecting-IP`/`X-Forwarded-For`. Om användarens Nginx
+  Proxy Manager inte skickar vidare dem blir alla besökare samma IP (bara webbläsaren skiljer)
+  och siffran blir för låg. Be användaren säga till om siffran ser konstig ut.
 - Användaren har inte bekräftat 2.1.6 med riktiga data. Fråga om linjen ser rätt ut för både
   620 och 643 (spår och Laxå-markering), och om inget står som "Okänt" under *Spår på sträckorna* på /admin.
 - Det är okänt varför en bit efter Degerfors visades som "okänt" i 2.1.0 (troligen ett
   stationsnamn som inte matchade). 2.1.2 och senare täcker det med tolerantare namn och
   knutpunktsregeln.
-- **Säkerhetskontrollen har aldrig körts.** Den skulle ha gått 2026-11-17 04:17 UTC men det
-  finns fortfarande inga körningar (kontrollerat efter 2.1.5). Kontrollera att standardgrenen
-  är `main`, och starta den manuellt (Actions → Security → Run workflow).
+- **Säkerhetskontrollen hade aldrig körts** (schemat 04:17 UTC gav inga körningar trots aktivt
+  arbetsflöde). Från 2.3.0 körs den även vid push till main. Kontrollera efter mergen att
+  *Security* och *CodeQL* har körts och är gröna.
+- Rekommenderat till användaren (görs i Cloudflare, inte i koden): Cloudflare Access för
+  `/admin*` och `/api/admin*`, och en Rate Limiting-regel för `/api/*`. Ej bekräftat gjort.
+- Login-spärren per IP går att kringgå av den som når proxyn förbi Cloudflare och förfalskar
+  `CF-Connecting-IP`; den globala spärren (50 fel/timme) fångar det. Cloudflare Access löser det.
 - Version 2.0.0 blev major innan versionsregeln fanns; numreringen fortsätter därifrån.

@@ -26,10 +26,12 @@ from pathlib import Path
 from xml.sax.saxutils import quoteattr
 from zoneinfo import ZoneInfo
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from .security import RateLimiter, SecurityMiddleware, client_ip, is_https
 
 API_URL = "https://api.trafikinfo.trafikverket.se/v2/data.json"
 API_KEY = os.environ.get("TRAFIKVERKET_API_KEY", "").strip()
@@ -96,6 +98,11 @@ CREATE TABLE IF NOT EXISTS track_sections (
     line TEXT,
     source TEXT NOT NULL,
     PRIMARY KEY (from_sig, to_sig)
+);
+CREATE TABLE IF NOT EXISTS sessions (
+    token_hash TEXT PRIMARY KEY,
+    expires INTEGER NOT NULL,
+    password_tag TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS visits (
     day TEXT NOT NULL,
@@ -189,6 +196,37 @@ def set_meta(key: str, value: str) -> None:
 def get_meta() -> dict[str, str]:
     with db() as conn:
         return {r["key"]: r["value"] for r in conn.execute("SELECT key, value FROM meta")}
+
+
+# Cache för de publika och tunga anropen (/api/stats, /api/trains). Töms när data ändras och
+# gäller högst en minut, eftersom pågående avgångar beror på klockan.
+CACHE_SECONDS = 60
+_cache: dict[tuple, tuple[float, int, object]] = {}
+_cache_gen = 0
+_cache_lock = threading.Lock()
+
+
+def data_changed() -> None:
+    global _cache_gen
+    with _cache_lock:
+        _cache_gen += 1
+        _cache.clear()
+
+
+def cached(key: tuple, compute):
+    now = time.monotonic()
+    with _cache_lock:
+        hit = _cache.get(key)
+        gen = _cache_gen
+        if hit and hit[1] == gen and now - hit[0] < CACHE_SECONDS:
+            return hit[2]
+    value = compute()
+    with _cache_lock:
+        if gen == _cache_gen:
+            if len(_cache) > 200:
+                _cache.clear()
+            _cache[key] = (now, gen, value)
+    return value
 
 
 # ---------------------------------------------------------------- Trafikverket
@@ -297,6 +335,7 @@ def poll_once(days_back: int | None = 3) -> None:
             n = fetch_announcements(idents, days_back)
             since = None if days_back is None else (datetime.now(TZ).date() - timedelta(days=days_back + 1)).isoformat()
             save_segments(idents, since)
+            data_changed()
             set_meta("last_poll_ok", datetime.now(timezone.utc).isoformat())
             set_meta("last_error", "")
             log.info("Hämtade %d tåglägen för %d tåg", n, len(idents))
@@ -706,27 +745,58 @@ async def lifespan(_: FastAPI):
     wake.set()
 
 
-app = FastAPI(title="Tågkoll", lifespan=lifespan, docs_url=None, redoc_url=None)
+app = FastAPI(title="Tågkoll", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 STATIC_DIR = Path(__file__).parent / "static"
 
 # ----------------------------------------------------------------------- admin
-# Inloggningen ger en kaka "<utgångstid>.<HMAC>" signerad med lösenordet. Byts lösenordet
-# blir alla gamla inloggningar ogiltiga.
+# Inloggningen ger en slumpad kaka. Servern sparar bara en hash av den (tabellen sessions), så
+# att utloggning verkligen avslutar sessionen och en läckt databas inte ger inloggning. Varje
+# session är knuten till lösenordet: byts ADMIN_PASSWORD blir alla sessioner ogiltiga.
 SESSION_COOKIE = "tagkoll_admin"
-SESSION_SECONDS = 7 * 24 * 3600
+SESSION_SECONDS = 12 * 3600
+MAX_BODY = 3 * 1024 * 1024
+# Inloggningsförsök: högst 5 misslyckade per IP och 15 minuter, och högst 50 totalt per timme.
+login_fail_ip = RateLimiter(limit=5, window=15 * 60)
+login_fail_all = RateLimiter(limit=50, window=3600)
+api_limiter = RateLimiter(limit=int(os.environ.get("API_RATE_LIMIT_PER_MINUTE", "120")), window=60)
 
 
-def _sign(expires: str) -> str:
-    return hmac.new(ADMIN_PASSWORD.encode(), f"tagkoll-admin:{expires}".encode(), hashlib.sha256).hexdigest()
+def _secret() -> str:
+    """Slumpad hemlighet som skapas vid första start och sparas i databasen."""
+    with db() as conn:
+        row = conn.execute("SELECT value FROM meta WHERE key = 'session_secret'").fetchone()
+        if row:
+            return row["value"]
+        value = secrets.token_hex(32)
+        conn.execute("INSERT OR IGNORE INTO meta VALUES ('session_secret', ?)", (value,))
+        return conn.execute("SELECT value FROM meta WHERE key = 'session_secret'").fetchone()["value"]
+
+
+_tag_cache: dict[str, str] = {}
+
+
+def _password_tag() -> str:
+    """Kod som knyter sessioner till lösenordet. scrypt är avsiktligt långsam, så att koden i
+    databasen inte går att använda för att gissa lösenordet. Räknas ut en gång per hemlighet."""
+    secret = _secret()
+    if secret not in _tag_cache:
+        _tag_cache.clear()
+        _tag_cache[secret] = hashlib.scrypt(ADMIN_PASSWORD.encode(), salt=secret.encode(),
+                                            n=2**15, r=8, p=1, maxmem=64 * 1024 * 1024).hex()
+    return _tag_cache[secret]
+
+
+def _token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
 def session_valid(token: str | None) -> bool:
-    if not ADMIN_PASSWORD or not token or "." not in token:
+    if not ADMIN_PASSWORD or not token or len(token) > 200:
         return False
-    expires, signature = token.split(".", 1)
-    if not expires.isdigit() or int(expires) < time.time():
-        return False
-    return hmac.compare_digest(signature, _sign(expires))
+    with db() as conn:
+        row = conn.execute("SELECT expires, password_tag FROM sessions WHERE token_hash = ?",
+                           (_token_hash(token),)).fetchone()
+    return bool(row) and row["expires"] > time.time() and hmac.compare_digest(row["password_tag"], _password_tag())
 
 
 def require_admin(request: Request) -> None:
@@ -740,47 +810,58 @@ admin_only = [Depends(require_admin)]
 
 
 class TrainIn(BaseModel):
-    ident: str
+    ident: str = Field(max_length=10)
 
 
 class LoginIn(BaseModel):
-    password: str
+    password: str = Field(max_length=256)
 
 
 class ResetIn(BaseModel):
-    confirm: str
+    confirm: str = Field(max_length=20)
 
 
 class ImportIn(BaseModel):
-    csv: str
-    source: str = "import"
+    csv: str = Field(max_length=2_500_000)
+    source: str = Field("import", max_length=60)
 
 
 class TrackIn(BaseModel):
-    from_sig: str
-    to_sig: str
+    from_sig: str = Field(max_length=20)
+    to_sig: str = Field(max_length=20)
     tracks: int | None = None
-    line: str | None = None
+    line: str | None = Field(None, max_length=60)
 
 
 def require_train(ident: str) -> None:
+    if not IDENT_RE.match(ident):
+        raise HTTPException(404, f"Tåg {ident[:10]} bevakas inte")
     with db() as conn:
         if not conn.execute("SELECT 1 FROM trains WHERE ident = ?", (ident,)).fetchone():
             raise HTTPException(404, f"Tåg {ident} bevakas inte")
 
 
-@app.get("/api/health")
-def health():
+def poll_status() -> dict:
     meta = get_meta()
     return {"ok": True, "version": VERSION, "api_key": bool(API_KEY), "last_poll_ok": meta.get("last_poll_ok"),
             "last_error": meta.get("last_error") or None}
 
 
+@app.get("/api/health")
+def health(request: Request):
+    """Publikt: bara om appen svarar. Inloggad admin får också status för hämtningen."""
+    if session_valid(request.cookies.get(SESSION_COOKIE)):
+        return poll_status()
+    return {"ok": True, "version": VERSION}
+
+
 @app.get("/api/trains")
 def list_trains():
-    with db() as conn:
-        idents = [r["ident"] for r in conn.execute("SELECT ident FROM trains ORDER BY CAST(ident AS INTEGER)")]
-    return [train_overview(i) for i in idents]
+    def compute():
+        with db() as conn:
+            idents = [r["ident"] for r in conn.execute("SELECT ident FROM trains ORDER BY CAST(ident AS INTEGER)")]
+        return [train_overview(i) for i in idents]
+    return cached(("trains",), compute)
 
 
 @app.post("/api/trains", status_code=201, dependencies=admin_only)
@@ -799,6 +880,7 @@ def add_train(body: TrainIn):
             save_segments([ident], None)
     except Exception:
         log.exception("Första hämtningen för tåg %s misslyckades", ident)
+    data_changed()
     return {**train_overview(ident), "found": found}
 
 
@@ -810,6 +892,7 @@ def delete_train(ident: str):
         conn.execute("DELETE FROM announcements WHERE train_ident = ?", (ident,))
         conn.execute("DELETE FROM imported_journeys WHERE train_ident = ?", (ident,))
         conn.execute("DELETE FROM delay_segments WHERE train_ident = ?", (ident,))
+    data_changed()
 
 
 @app.post("/api/refresh", dependencies=admin_only)
@@ -818,12 +901,16 @@ def refresh():
     last = get_meta().get("last_poll_ok")
     if not last or datetime.fromisoformat(last) < datetime.now(timezone.utc) - timedelta(seconds=30):
         poll_once()
-    return health()
+    return poll_status()
 
 
 @app.get("/api/stats")
-def stats(train: str, days: int | None = None):
+def stats(train: str = Query(max_length=10), days: int | None = Query(None, ge=1, le=3650)):
     require_train(train)
+    return cached(("stats", train, days), lambda: compute_stats(train, days))
+
+
+def compute_stats(train: str, days: int | None) -> dict:
     since = (datetime.now(TZ).date() - timedelta(days=days - 1)).isoformat() if days else None
     journeys = load_journeys(train, since)
     meta = get_meta()
@@ -837,7 +924,7 @@ def stats(train: str, days: int | None = None):
         "weeks": weekly_stats(journeys),
         "journeys": journeys,
         "last_poll_ok": meta.get("last_poll_ok"),
-        "last_error": meta.get("last_error") or None,
+        "fetch_error": bool(meta.get("last_error")),
         "poll_seconds": POLL_SECONDS,
         "version": VERSION,
     }
@@ -874,13 +961,15 @@ def import_history(ident: str, body: ImportIn):
                  status=excluded.status, delay_min=excluded.delay_min, source=excluded.source""",
             records,
         )
-    return {"imported": len(records), "skipped_lines": errors}
+    data_changed()
+    return {"imported": len(records), "skipped_lines": errors[:200]}
 
 
 def recompute_all_segments() -> None:
     with db() as conn:
         idents = [r["ident"] for r in conn.execute("SELECT ident FROM trains")]
     save_segments(idents, None)
+    data_changed()
 
 
 @app.get("/api/tracks")
@@ -932,20 +1021,39 @@ def admin_session(request: Request):
 
 
 @app.post("/api/admin/login")
-def admin_login(body: LoginIn, response: Response):
+def admin_login(body: LoginIn, request: Request, response: Response):
     if not ADMIN_PASSWORD:
         raise HTTPException(503, "Admin är avstängt. Sätt ADMIN_PASSWORD i .env och starta om containern.")
+    ip = client_ip(request)
+    for limiter, key in ((login_fail_ip, ip), (login_fail_all, "*")):
+        if limiter.blocked(key):
+            wait = limiter.retry_after(key)
+            log.warning("Inloggning spärrad (%s) i %d s", "ip" if key == ip else "alla", wait)
+            raise HTTPException(429, f"För många misslyckade inloggningar. Försök igen om {max(1, wait // 60)} min.",
+                                headers={"Retry-After": str(wait)})
     if not hmac.compare_digest(body.password.encode(), ADMIN_PASSWORD.encode()):
-        time.sleep(1)  # bromsar gissningar
+        login_fail_ip.hit(ip)
+        login_fail_all.hit("*")
+        log.warning("Misslyckad inloggning")
         raise HTTPException(401, "Fel lösenord.")
-    expires = str(int(time.time()) + SESSION_SECONDS)
-    response.set_cookie(SESSION_COOKIE, f"{expires}.{_sign(expires)}", max_age=SESSION_SECONDS,
-                        httponly=True, samesite="strict", path="/")
+    login_fail_ip.clear(ip)
+    token = secrets.token_urlsafe(32)
+    now = int(time.time())
+    tag = _password_tag()  # före transaktionen nedan, som annars låser databasen för _secret()
+    with db() as conn:
+        conn.execute("DELETE FROM sessions WHERE expires < ?", (now,))
+        conn.execute("INSERT INTO sessions VALUES (?, ?, ?)", (_token_hash(token), now + SESSION_SECONDS, tag))
+    response.set_cookie(SESSION_COOKIE, token, max_age=SESSION_SECONDS, httponly=True, samesite="strict",
+                        secure=is_https(request), path="/")
     return {"logged_in": True}
 
 
 @app.post("/api/admin/logout")
-def admin_logout(response: Response):
+def admin_logout(request: Request, response: Response):
+    token = request.cookies.get(SESSION_COOKIE)
+    if token:
+        with db() as conn:
+            conn.execute("DELETE FROM sessions WHERE token_hash = ?", (_token_hash(token[:200]),))
     response.delete_cookie(SESSION_COOKIE, path="/")
     return {"logged_in": False}
 
@@ -957,9 +1065,11 @@ def admin_reset(body: ResetIn):
         raise HTTPException(422, "Skriv RADERA för att bekräfta.")
     with poll_lock:
         with db() as conn:
-            for table in ("announcements", "imported_journeys", "delay_segments", "trains", "meta"):
+            for table in ("announcements", "imported_journeys", "delay_segments", "trains"):
                 conn.execute(f"DELETE FROM {table}")
+            conn.execute("DELETE FROM meta WHERE key <> 'session_secret'")  # admin förblir inloggad
         init_db()
+    data_changed()
     log.warning("All data raderad via admin, börjar om med tåg %s", ", ".join(INITIAL_TRAINS))
     threading.Thread(target=poll_once, kwargs={"days_back": None}, daemon=True).start()
     return {"trains": [t for t in INITIAL_TRAINS if IDENT_RE.match(t)]}
@@ -985,9 +1095,7 @@ BOT_RE = re.compile(r"bot|crawl|spider|slurp|preview|monitor|curl|wget|python|he
 visit_lock = threading.Lock()
 
 
-def client_ip(request: Request) -> str:
-    ip = request.headers.get("cf-connecting-ip") or request.headers.get("x-forwarded-for", "").split(",")[0]
-    return ip.strip() or (request.client.host if request.client else "")
+MAX_VISITORS_PER_DAY = 20_000  # skydd mot att någon fyller databasen med påhittade besök
 
 
 def visit_salt(conn: sqlite3.Connection, today: str) -> str:
@@ -1009,8 +1117,10 @@ def record_visit(request: Request) -> None:
     try:
         with visit_lock, db() as conn:
             salt = visit_salt(conn, today)
-            visitor = hashlib.sha256(f"{salt}|{client_ip(request)}|{agent}".encode()).hexdigest()
-            conn.execute("INSERT OR IGNORE INTO visits VALUES (?, ?)", (today, visitor))
+            visitor = hashlib.sha256(f"{salt}|{client_ip(request)}|{agent[:400]}".encode()).hexdigest()
+            n = conn.execute("SELECT COUNT(*) FROM visits WHERE day = ?", (today,)).fetchone()[0]
+            if n < MAX_VISITORS_PER_DAY:
+                conn.execute("INSERT OR IGNORE INTO visits VALUES (?, ?)", (today, visitor))
     except sqlite3.Error:
         log.exception("Kunde inte räkna besöket")  # räknaren får aldrig stoppa sidan
 
@@ -1037,3 +1147,4 @@ def admin_page():
 
 
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
+app.add_middleware(SecurityMiddleware, max_body=MAX_BODY, api_limiter=api_limiter)

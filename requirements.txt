@@ -1,3 +1,9 @@
-fastapi==0.115.6
-uvicorn==0.34.0
-tzdata==2025.2
+# Direkta beroenden och de viktigaste indirekta, låsta till kända versioner.
+# Dependabot föreslår uppdateringar och Security-arbetsflödet granskar dem dagligen.
+fastapi==0.163.1
+starlette==1.10.0
+pydantic==2.14.3
+uvicorn==0.54.0
+h11==0.16.0
+anyio==4.16.0
+tzdata==2026.6
