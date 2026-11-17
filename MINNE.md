@@ -3,7 +3,7 @@
 Överlämning mellan chattsessioner. Läs den här filen och `CLAUDE.md` först i en ny session,
 och uppdatera filen när något viktigt ändras (via PR, utan versionshöjning).
 
-*Senast uppdaterad: 2026-11-17, efter release v2.1.5.*
+*Senast uppdaterad: 2026-11-17, efter release v2.1.5, inför v2.1.6.*
 
 ## Vad Tågkoll är
 
@@ -105,6 +105,9 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
   rättad statustext för pågående tåg (beskrev läget vid planerad ankomst sedan 2.1.1).
   Release-körningen och `docker pull` av `2.1.5` och `latest` utan inloggning kontrollerade.
   Användaren har inte bekräftat linjen med riktiga data efter 2.1.5.
+- **v2.1.6**: Laxå-etiketten visades bara om sträckan var bredare än 70 px – syntes för 643
+  men inte för 620. Nu visas den alltid. Användaren var (med rätta) irriterad: **testa alltid
+  båda tågen/riktningarna** (`test/add643.py`-mönstret: spegelvänd kopia av 620) innan release.
 
 ## Spårdata
 

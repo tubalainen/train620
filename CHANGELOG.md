@@ -2,6 +2,11 @@
 
 Varje release får ett avsnitt `## [x.y.z] - ÅÅÅÅ-MM-DD`. Avsnittet blir releasetexten på GitHub.
 
+## [2.1.6] - 2026-11-17
+
+- Markeringen *Laxå* på linjen visas nu alltid, för både tåg 620 och 643. Tidigare visades namnet bara när sträckan förbi Laxå var tillräckligt bred på skärmen, så för 620 syndes bara ett streck.
+- Texten ovanför linjen säger inte längre "var det framme i …" om ett tåg som var några minuter sent.
+
 ## [2.1.5] - 2026-11-17
 
 - Spåren på linjen följer nu: dubbelspår Karlstad C–Skattkärr, enkelspår Skattkärr–Laxå och dubbelspår (stambanan) Laxå–Stockholm C. Samma sak gäller tåg 643 i motsatt riktning.
