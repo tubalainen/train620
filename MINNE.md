@@ -3,7 +3,7 @@
 Överlämning mellan chattsessioner. Läs den här filen och `CLAUDE.md` först i en ny session,
 och uppdatera filen när något viktigt ändras (via PR, utan versionshöjning).
 
-*Senast uppdaterad: 2026-11-17, efter release v2.1.5, inför v2.1.6.*
+*Senast uppdaterad: 2026-11-17, efter release v2.1.6, inför v2.2.0.*
 
 ## Vad Tågkoll är
 
@@ -35,7 +35,8 @@ Karlstad C, SJ Snabbtåg) bevakas.
 
 SQLite-tabeller: `trains`, `announcements` (alla hållplatslägen från Trafikverket),
 `imported_journeys` (CSV-import, används bara för dagar utan egna data), `stations`, `meta`,
-`delay_segments` (var förseningen uppstod per delsträcka/uppehåll, räknas om efter varje
+`visits` (anonyma besökare: sha256(dygnssalt|ip|UA), saltet i `meta` byts och gamla rader
+raderas vid dygnsbyte – inga IP-adresser sparas), `delay_segments` (var förseningen uppstod per delsträcka/uppehåll, räknas om efter varje
 hämtning) och `track_sections` (antal spår per sträcka; `inbyggd` från `DEFAULT_LINES` eller
 `admin` när användaren rättat). Nya tabeller skapas automatiskt vid start.
 
@@ -105,9 +106,15 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
   rättad statustext för pågående tåg (beskrev läget vid planerad ankomst sedan 2.1.1).
   Release-körningen och `docker pull` av `2.1.5` och `latest` utan inloggning kontrollerade.
   Användaren har inte bekräftat linjen med riktiga data efter 2.1.5.
-- **v2.1.6**: Laxå-etiketten visades bara om sträckan var bredare än 70 px – syntes för 643
-  men inte för 620. Nu visas den alltid. Användaren var (med rätta) irriterad: **testa alltid
-  båda tågen/riktningarna** (t.ex. en spegelvänd kopia av 620 som 643 i en testdatabas) innan release.
+- **v2.1.6** (2026-11-17): Laxå-etiketten visades bara om sträckan var bredare än 70 px –
+  syntes för 643 men inte för 620. Nu visas den alltid. Även rättad ankomsttext vid liten
+  försening. Release-körningen och `docker pull` av `2.1.6` och `latest` utan inloggning
+  kontrollerade; rättelsen finns i imagen. Användaren var (med rätta) irriterad: **testa alltid
+  båda tågen/riktningarna** (t.ex. en spegelvänd kopia av 620 som 643 i en testdatabas) innan
+  release.
+- **v2.2.0**: besökare i dag uppe till höger (`/api/visitors`, räknas bara vid sidladdning av
+  `/`, inte admin/API/robotar) och avsnittet *Kakor och integritet* i sidfoten, inklusive
+  Cloudflare (användarens val). Dashboarden ska fortsätta vara helt utan kakor.
 
 ## Spårdata
 
@@ -136,8 +143,8 @@ Användarens slutliga besked (efter flera rundor 2.1.2–2.1.5):
 
 ## Öppna punkter
 
-- Användaren har inte bekräftat 2.1.5 med riktiga data. Fråga om linjen ser rätt ut för både
-  620 och 643, och om inget står som "Okänt" under *Spår på sträckorna* på /admin.
+- Användaren har inte bekräftat 2.1.6 med riktiga data. Fråga om linjen ser rätt ut för både
+  620 och 643 (spår och Laxå-markering), och om inget står som "Okänt" under *Spår på sträckorna* på /admin.
 - Det är okänt varför en bit efter Degerfors visades som "okänt" i 2.1.0 (troligen ett
   stationsnamn som inte matchade). 2.1.2 och senare täcker det med tolerantare namn och
   knutpunktsregeln.

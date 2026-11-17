@@ -18,6 +18,10 @@
       </div>
     </div>
     <div class="sync">
+      <span id="visitors" class="visitors" title="Unika besökare i dag, räknas anonymt utan kakor" hidden>
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><circle cx="8" cy="5" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M2.5 14.5c.6-3 2.8-4.5 5.5-4.5s4.9 1.5 5.5 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <span id="visitors-text"></span>
+      </span>
       <span id="sync-text">Hämtar …</span>
     </div>
   </header>
@@ -134,6 +138,16 @@
   <footer>
     <p id="foot"></p>
     <p>Källa: Trafikverkets öppna API (TrainAnnouncement). Trafikverket sparar bara några dagar bakåt, så statistiken växer från den dag ett tåg börjar bevakas.</p>
+    <section class="privacy" aria-labelledby="privacy-title">
+      <h2 id="privacy-title">Kakor och integritet</h2>
+      <ul>
+        <li>Tågkoll sätter inga kakor för besökare och använder ingen spårning, inga annonser och inga analystjänster från tredje part.</li>
+        <li>Valt tåg och period sparas bara i din egen webbläsare (localStorage) och skickas aldrig till servern.</li>
+        <li>Besökare räknas anonymt: en engångskod av IP-adress och webbläsare, blandad med ett slumpvärde som byts varje natt. IP-adressen sparas aldrig, och koderna raderas när dygnet är slut. Det går inte att se vem som har besökt sidan eller känna igen någon mellan dagar.</li>
+        <li>Adminsidan sätter en nödvändig inloggningskaka, och bara för den som loggar in där.</li>
+        <li>Sidan förmedlas via Cloudflare, som kan sätta egna tekniska kakor (t.ex. mot robotar) och föra trafikstatistik enligt sina egna villkor.</li>
+      </ul>
+    </section>
   </footer>
 
   <div id="tooltip" class="tooltip" hidden></div>

@@ -47,6 +47,14 @@ inte anger kilometer.
   Rätta dem på adminsidan under *Spår på sträckorna*. Sträckor på andra banor visas som okända
   tills de anges där.
 
+## Besökare och integritet
+
+Dashboarden visar antalet unika besökare i dag. Besök på `/` räknas som en hash av IP-adress
+och User-Agent, blandad med ett slumpat salt som byts varje dygn (tabellen `visits`). Varken
+IP-adresser eller kakor sparas, och gårdagens hashar raderas tillsammans med saltet. Robotar
+och verktyg som `curl` räknas inte. IP-adressen läses från `CF-Connecting-IP` eller
+`X-Forwarded-For` när appen ligger bakom Cloudflare eller en proxy.
+
 ## Inställningar (`.env`)
 
 | Variabel | Standard | Betydelse |

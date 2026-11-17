@@ -884,10 +884,23 @@ $("periods").addEventListener("click", (e) => {
 let resizeTimer;
 new ResizeObserver(() => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { renderCharts(); renderLine(); }, 120); }).observe(document.querySelector("main"));
 
+async function loadVisitors() {
+  try {
+    const { today } = await api("/api/visitors");
+    $("visitors-text").textContent = `${nf(today)} besökare i dag`;
+    $("visitors").hidden = false;
+  } catch { /* räknaren är inte viktig nog att visa fel för */ }
+}
+
 (async function start() {
+  loadVisitors();
   try {
     await loadTrains();
     await loadStats();
   } catch (e) { showMessage(e.message); }
-  setInterval(() => { if (!document.hidden) loadStats().catch(() => {}); }, 60000);
+  setInterval(() => {
+    if (document.hidden) return;
+    loadStats().catch(() => {});
+    loadVisitors();
+  }, 60000);
 })();

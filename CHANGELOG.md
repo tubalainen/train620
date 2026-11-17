@@ -2,6 +2,11 @@
 
 Varje release får ett avsnitt `## [x.y.z] - ÅÅÅÅ-MM-DD`. Avsnittet blir releasetexten på GitHub.
 
+## [2.2.0] - 2026-11-17
+
+- Nytt: **antal besökare i dag** visas uppe till höger på dashboarden. Varje besökare räknas en gång per dag, helt anonymt och utan kakor. Räkningen använder en engångskod av IP-adress och webbläsare, blandad med ett slumpvärde som byts varje natt. IP-adressen sparas aldrig, och koderna raderas när dygnet är slut. Robotar räknas inte.
+- Nytt avsnitt **Kakor och integritet** längst ned på sidan. Det beskriver att Tågkoll inte sätter kakor för besökare och inte spårar någon, att valt tåg och period bara sparas i din webbläsare, hur besökare räknas, att adminsidan har en inloggningskaka och att Cloudflare kan sätta egna kakor. Adminsidan har fått en motsvarande rad om sin inloggningskaka.
+
 ## [2.1.6] - 2026-11-17
 
 - Markeringen *Laxå* på linjen visas nu alltid, för både tåg 620 och 643. Tidigare visades namnet bara när sträckan förbi Laxå var tillräckligt bred på skärmen, så för 620 syndes bara ett streck.
