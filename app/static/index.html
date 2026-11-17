@@ -44,9 +44,29 @@
       <section class="train-head">
         <h2 id="train-title"></h2>
         <p id="train-sub"></p>
+        <p id="train-age" class="age"></p>
       </section>
 
       <section id="today" class="today" hidden></section>
+
+      <section id="line-card" class="card line-card" hidden>
+        <div class="line-head">
+          <div>
+            <h3 id="line-title">Linjen</h3>
+            <p class="sub" id="line-sub"></p>
+          </div>
+          <div class="line-actions">
+            <span id="line-clock" class="line-clock"></span>
+            <button id="line-play" type="button">▶ Spela upp resan</button>
+          </div>
+        </div>
+        <div id="line" class="line-chart"></div>
+        <div class="legend" id="line-legend"></div>
+        <details id="delay-details" class="delay-details">
+          <summary><span class="summary-title">Var uppstod förseningen?</span> <span id="delay-summary" class="summary-text"></span></summary>
+          <div id="delay-body"></div>
+        </details>
+      </section>
 
       <section class="kpis" aria-label="Nyckeltal">
         <div class="tile hero">
@@ -98,7 +118,7 @@
 
       <section class="card">
         <h3>Avgångar</h3>
-        <p class="sub">Klicka på en rad för att se alla stationer.</p>
+        <p class="sub">Klicka på en rad för att se alla stationer och visa avgången på linjen.</p>
         <div class="table-wrap">
           <table id="journeys">
             <thead><tr><th>Datum</th><th>Status</th><th class="num">Planerad ankomst</th><th class="num">Verklig ankomst</th><th class="num">Försening</th><th>Avvikelser</th></tr></thead>

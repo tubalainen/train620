@@ -33,6 +33,20 @@ och överlever omstarter och ombyggen.
   klistra in rader. En rad per dag:
   `datum;försening_min;inställt`. Importerade dagar används bara där egna data saknas.
 
+## Linjen
+
+Dashboarden visar den senaste avgången (eller den som väljs med *Visa på linjen* i tabellen)
+som en linje från start till mål. Ångloket är tåget, det streckade loket är var tåget skulle ha
+varit enligt tidtabellen. Avståndet längs linjen motsvarar planerad restid, eftersom Trafikverket
+inte anger kilometer.
+
+- Sträckorna färgas efter hur mycket förseningen ökade där, och inställda sträckor är röda.
+  Uträkningen sparas i tabellen `delay_segments` efter varje hämtning.
+- Enkel- och dubbelspår kommer från inbyggda, ungefärliga uppgifter om banorna mellan Karlstad
+  och Stockholm (`DEFAULT_LINES` i `app/main.py`) och sparas per sträcka i `track_sections`.
+  Rätta dem på adminsidan under *Spår på sträckorna*. Sträckor på andra banor visas som okända
+  tills de anges där.
+
 ## Inställningar (`.env`)
 
 | Variabel | Standard | Betydelse |
