@@ -104,6 +104,7 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
   `latest` utan inloggning, samma image): *I dag* visar "Har avgått" + avgångstid och om den var i
   tid (`actual_departure`, `departure_delay`, `last_station`). Användarens skärmbild före 2.5.1 visade
   att hämtningen framåt fungerar mot Trafikverket (*Kommande* t.o.m. 7 dagar fram).
+  Användaren har uppgraderat totoro till 2.5.1 och bekräftat att det ser bra ut.
 - **v2.5.0** (2026-11-17), släppt och kontrollerad (PR #24, Release #17, `docker pull` av `2.5.0` och
   `latest` utan inloggning, samma image, `DAYS_AHEAD` och *Kommande avgångar* finns i imagen):
   kommande avgångar 7 dagar framåt och prognos före avgång. Ej provat mot riktiga data, se öppna punkter.
