@@ -553,10 +553,9 @@ function renderLine() {
     }
     if (s.split) {
       svg("line", { x1: xm, x2: xm, y1: railY - 7, y2: railY + 7, class: "junction" }, g);
-      if (x2 - x1 > 70) {
-        const t = svg("text", { x: xm, y: railY - 12, "text-anchor": "middle", class: "junction-label" }, g);
-        t.textContent = s.split.at;
-      }
+      // Knutpunkten får alltid sitt namn, oavsett hur kort sträckan är och åt vilket håll tåget går.
+      const t = svg("text", { x: xm, y: railY - 12, "text-anchor": "middle", class: "junction-label" }, g);
+      t.textContent = s.split.at;
     }
     if (s.canceled) svg("line", { x1, x2, y1: railY, y2: railY, class: "strike" }, g);
     svg("rect", { class: "hit", x: x1, y: railY - 16, width: Math.max(2, x2 - x1), height: 32 }, g);
@@ -723,8 +722,9 @@ function lineStatusText(j, points, r, real) {
   }
   if (real.stoppedAt !== null) return `Tåget kom inte längre än ${points[real.stoppedAt].station}, resten av sträckan ställdes in.`;
   if (j.delay !== null && j.delay > 0) {
-    return `Framme i ${points[points.length - 1].station} ${hhmm(j.actual_arrival)}, ${j.delay} min sent. ` +
-      `När tåget skulle ha varit framme (${hhmm(j.planned_arrival)}) var det ${where} – spela upp resan för att se var förseningen uppstod.`;
+    const done = `Framme i ${points[points.length - 1].station} ${hhmm(j.actual_arrival)}, ${j.delay} min sent.`;
+    if (r.index === points.length - 1) return `${done} Spela upp resan för att se var förseningen uppstod.`;
+    return `${done} När tåget skulle ha varit framme (${hhmm(j.planned_arrival)}) var det ${where} – spela upp resan för att se var förseningen uppstod.`;
   }
   return `Tåget kom fram ${hhmm(j.actual_arrival)}, ${j.delay < 0 ? `${-j.delay} min före tidtabell` : "enligt tidtabell"}.`;
 }
