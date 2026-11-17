@@ -772,8 +772,18 @@ def _secret() -> str:
         return conn.execute("SELECT value FROM meta WHERE key = 'session_secret'").fetchone()["value"]
 
 
+_tag_cache: dict[str, str] = {}
+
+
 def _password_tag() -> str:
-    return hmac.new(_secret().encode(), ADMIN_PASSWORD.encode(), hashlib.sha256).hexdigest()
+    """Kod som knyter sessioner till lösenordet. scrypt är avsiktligt långsam, så att koden i
+    databasen inte går att använda för att gissa lösenordet. Räknas ut en gång per hemlighet."""
+    secret = _secret()
+    if secret not in _tag_cache:
+        _tag_cache.clear()
+        _tag_cache[secret] = hashlib.scrypt(ADMIN_PASSWORD.encode(), salt=secret.encode(),
+                                            n=2**15, r=8, p=1, maxmem=64 * 1024 * 1024).hex()
+    return _tag_cache[secret]
 
 
 def _token_hash(token: str) -> str:
