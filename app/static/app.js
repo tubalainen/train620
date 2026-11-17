@@ -529,11 +529,21 @@ function positionAt(tl, t, xOf) {
     const a = seq[k - 1], b = seq[k];
     if (t < b.t) {
       const f = (t - a.t) / (b.t - a.t || 1);
-      return { x: xOf(a.i) + (xOf(b.i) - xOf(a.i)) * f, delay: a.delay, index: f < 0.5 ? a.i : b.i };
+      // Mellan två olika punkter rullar tåget; mellan ankomst och avgång på samma station står det still.
+      return { x: xOf(a.i) + (xOf(b.i) - xOf(a.i)) * f, delay: a.delay, index: f < 0.5 ? a.i : b.i, moving: a.i !== b.i };
     }
   }
   const z = seq[seq.length - 1];
   return { x: xOf(z.i), delay: z.delay, index: z.i };
+}
+
+/** Lokets färg efter förseningen: grönt i tid, orange runt 5 min, rött från 20 min. */
+function locoColor(delay) {
+  const d = Math.max(0, delay ?? 0);
+  if (d <= 1) return "var(--good)";
+  if (d < 6) return `color-mix(in oklab, var(--late) ${Math.round(((d - 1) / 5) * 100)}%, var(--good))`;
+  if (d < 20) return `color-mix(in oklab, var(--critical) ${Math.round(((d - 6) / 14) * 100)}%, var(--late))`;
+  return "var(--critical)";
 }
 
 /** Ett ånglok i SVG med fronten i (0,0) på rälsen och färdriktning åt höger. */
@@ -743,8 +753,9 @@ function renderLine() {
     loco.setAttribute("transform", `translate(${r.x},${railY - 4}) scale(${scale})`);
     ghost.setAttribute("transform", `translate(${g.x},${railY - 4}) scale(${scale})`);
     loco.classList.toggle("stopped", stopped || fullyCanceled);
-    const moving = !stopped && t > (real.seq[0]?.t ?? Infinity) && t < lastReal;
-    loco.classList.toggle("moving", moving);
+    // Röken kommer bara när tåget rullar, inte när det står på en station, före avgång eller framme.
+    loco.classList.toggle("moving", !stopped && !fullyCanceled && !!r.moving);
+    loco.style.setProperty("--loco", stopped || fullyCanceled ? "var(--ink)" : locoColor(r.delay));
     const apart = g.x - r.x > 24 * scale;
     ghostTag.setAttribute("x", g.x - 24 * scale);
     ghostTag.setAttribute("text-anchor", "middle");
