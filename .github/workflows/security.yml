@@ -3,13 +3,15 @@ name: Security
 # Daglig kontroll av kända säkerhetshål:
 #  1. Trivy granskar den släppta imagen (operativsystem och alla installerade paket).
 #  2. pip-audit granskar Python-beroendena i requirements.txt mot PyPI:s sårbarhetsdatabas.
-# Körs varje natt, efter varje ändring på main (t.ex. en release) och när den startas för hand.
+# Körs varje natt, efter varje release och när den startas för hand.
 # Hittas allvarliga hål misslyckas jobbet och ett ärende öppnas; ärendet stängs när allt är rent.
 on:
   schedule:
     - cron: "17 4 * * *"
-  push:
-    branches: [main]
+  # Efter varje release, när den nya imagen är publicerad (inte samtidigt som mergen).
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
   workflow_dispatch:
 
 permissions:

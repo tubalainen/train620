@@ -3,8 +3,16 @@ FROM python:3.13-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 DB_PATH=/data/trains.db
 WORKDIR /srv
 
+# Säkerhetsuppdateringar för operativsystemet, även om basimagen inte hunnit byggas om.
+RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -r requirements.txt
+# pip behövs bara vid bygget. Den tas bort efteråt, tillsammans med pip-hjulet i ensurepip,
+# så att imagen inte innehåller pip eller paketen som pip bär med sig.
+RUN pip install --no-cache-dir --upgrade pip \
+ && pip install --no-cache-dir -r requirements.txt \
+ && pip uninstall -y pip \
+ && rm -rf /usr/local/lib/python3.13/ensurepip/_bundled /root/.cache
 
 COPY app ./app
 COPY VERSION .

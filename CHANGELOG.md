@@ -2,6 +2,11 @@
 
 Varje release får ett avsnitt `## [x.y.z] - ÅÅÅÅ-MM-DD`. Avsnittet blir releasetexten på GitHub.
 
+## [2.3.1] - 2026-11-17
+
+- Rättar de säkerhetshål som den första dagliga säkerhetskontrollen hittade i imagen. Operativsystemets paket uppdateras när imagen byggs, vilket bland annat rättar en allvarlig brist i zlib. Pakethanteraren pip tas bort ur den färdiga imagen, och med den de gamla paket som pip bar med sig (bl.a. setuptools). Imagen har nu inga kända säkerhetshål med tillgänglig rättning.
+- Säkerhetskontrollen på GitHub körs nu när en release är helt klar, så att den granskar den nya imagen och inte den föregående.
+
 ## [2.3.0] - 2026-11-17
 
 Säkerhetsrelease. **Du behöver logga in på adminsidan igen** efter uppgraderingen. Inga andra manuella åtgärder krävs.
