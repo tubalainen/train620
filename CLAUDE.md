@@ -4,6 +4,9 @@ Webbapp som samlar förseningar och inställda tåg från Trafikverkets API (Fas
 dashboard i `app/static/`). Körs som Docker-container på port 8843. Skriv till användaren,
 i gränssnittet och i ändringsloggen på svenska.
 
+**Läs `MINNE.md` först** – där står läget, driften, begränsningar i molnsessionen och öppna
+punkter. Uppdatera den när något viktigt ändras.
+
 ## Releaseflöde
 
 Varje uppdatering går till `main` via en pull request och avslutas med en release.
