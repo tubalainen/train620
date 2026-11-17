@@ -84,8 +84,8 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
 - Varje uppdatering: PR mot `main` → grön *Build* → användaren säger "merga" → release →
   kontrollera `docker pull` utan inloggning och rapportera. Se `CLAUDE.md`.
 - Versionsregel: mindre → `0.0.x`, halvstor → `0.x.0`, major → `x.0.0`. Fråga vid tvekan.
-- Användaren har inget tålamod med påståenden om att något "inte går" utan att det är
-  kontrollerat: verifiera först och förklara konkret varför.
+- Kontrollera innan du säger att något inte går, och förklara då konkret varför (t.ex. vad
+  ett test faktiskt svarade).
 
 ## Öppna punkter
 
