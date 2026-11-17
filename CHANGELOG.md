@@ -2,6 +2,11 @@
 
 Varje release får ett avsnitt `## [x.y.z] - ÅÅÅÅ-MM-DD`. Avsnittet blir releasetexten på GitHub.
 
+## [2.4.0] - 2026-11-17
+
+- Nytt: **spela upp äldre avgångar.** På linjekortet finns en väljare med alla avgångar som Tågkoll har samlat in från Trafikverket, oavsett vald period. Välj en avgång och tryck *Spela upp resan* för att se hur tåget gick och var förseningen uppstod. Varje avgång i listan visas med datum och utfall, till exempel "+13 min" eller "inställt".
+- Importerad historik (från CSV) finns inte med i väljaren. Där finns bara slutförseningen och ingen uppgift om var tåget var under resan.
+
 ## [2.3.1] - 2026-11-17
 
 - Rättar de säkerhetshål som den första dagliga säkerhetskontrollen hittade i imagen. Operativsystemets paket uppdateras när imagen byggs, vilket bland annat rättar en allvarlig brist i zlib. Pakethanteraren pip tas bort ur den färdiga imagen, och med den de gamla paket som pip bar med sig (bl.a. setuptools). Imagen har nu inga kända säkerhetshål med tillgänglig rättning.

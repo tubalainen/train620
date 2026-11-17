@@ -930,6 +930,35 @@ def compute_stats(train: str, days: int | None) -> dict:
     }
 
 
+@app.get("/api/journeys")
+def replayable_journeys(train: str = Query(max_length=10)):
+    """Alla avgångar med egna hållplatsdata från Trafikverket, nyast först. Bara de går att spela upp."""
+    require_train(train)
+
+    def compute():
+        return [{"date": j["date"], "status": j["status"], "delay": j["delay"]}
+                for j in load_journeys(train, None) if len(j["points"]) > 1]
+    return cached(("journeys", train), compute)
+
+
+@app.get("/api/journey")
+def one_journey(train: str = Query(max_length=10), day: str = Query(alias="date", pattern=r"^\d{4}-\d{2}-\d{2}$")):
+    """En avgång med alla hållplatslägen, för uppspelning på linjen."""
+    require_train(train)
+
+    def compute():
+        with db() as conn:
+            names = {r["signature"]: r["name"] for r in conn.execute("SELECT * FROM stations")}
+            rows = conn.execute("SELECT * FROM announcements WHERE train_ident = ? AND departure_date = ?",
+                                (train, day)).fetchall()
+            tracks = load_tracks(conn)
+        return build_journey(day, rows, names, datetime.now(TZ), tracks) if rows else None
+    j = cached(("journey", train, day), compute)
+    if not j or len(j["points"]) < 2:
+        raise HTTPException(404, "Det finns inga hållplatsdata för den avgången.")
+    return j
+
+
 @app.post("/api/trains/{ident}/import", dependencies=admin_only)
 def import_history(ident: str, body: ImportIn):
     """Importerar historik per avgångsdag: datum;försening_min;inställt (inställt = ja/nej, valfri).
