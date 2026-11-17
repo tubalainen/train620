@@ -2,6 +2,12 @@
 
 Varje release får ett avsnitt `## [x.y.z] - ÅÅÅÅ-MM-DD`. Avsnittet blir releasetexten på GitHub.
 
+## [2.5.1] - 2026-11-17
+
+- Tydligare när tåget har avgått: *I dag* visar **Har avgått** med en grön bock, eller en gul markering om tåget är mer än 5 minuter sent. Texten säger när tåget avgick och om det var i tid, till exempel "Avgick från Stockholm C 15:04, 2 min sent". Den säger också var tåget senast rapporterades och när det beräknas vara framme.
+- Linjen visar också avgångstiden och om den var i tid. I avgångsväljaren står "på väg" i stället för "planerat" för ett tåg som har avgått.
+- Rättad dubbel punkt efter datumet i *Kommande avgångar*.
+
 ## [2.5.0] - 2026-11-17
 
 - Nytt: **Kommande avgångar.** Tågkoll hämtar nu avgångar upp till 7 dagar framåt, så långt Trafikverket har publicerat dem. En avgång som ställs in i förväg, till exempel på grund av banarbete, syns därför direkt i rutan *Kommande avgångar* under *I dag*, med Trafikverkets orsak när den finns. Tidigare syntes en inställning först från midnatt samma dag.

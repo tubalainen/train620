@@ -532,11 +532,13 @@ def build_journey(day: str, rows: list[sqlite3.Row], names: dict[str, str], now:
         status = "partial" if n_canceled else "unknown"
 
     current_delay = None
+    last_station = None    # senaste plats där ett pågående tåg har rapporterat en verklig tid
     forecast_delay = None  # Trafikverkets prognos för avgången, innan tåget har lämnat startstationen
     if status == "pending":
         seen = [r for r in ordered if r["actual_time"]]
         if seen:
             current_delay = minutes_between(seen[-1]["actual_time"], seen[-1]["advertised_time"])
+            last_station = names.get(seen[-1]["location"], seen[-1]["location"])
         elif origin["estimated_time"] and not origin["canceled"]:
             forecast_delay = minutes_between(origin["estimated_time"], origin["advertised_time"])
 
@@ -558,6 +560,9 @@ def build_journey(day: str, rows: list[sqlite3.Row], names: dict[str, str], now:
         "delay": delay,
         "current_delay": current_delay,
         "forecast_delay": forecast_delay,
+        "last_station": last_station,
+        "actual_departure": origin["actual_time"],
+        "departure_delay": minutes_between(origin["actual_time"], origin["advertised_time"]) if origin["actual_time"] else None,
         "estimated_departure": origin["estimated_time"],
         "estimated_arrival": dest["estimated_time"],
         "origin": name(origin["location"]),
@@ -643,7 +648,8 @@ def load_journeys(ident: str, since: str | None, upcoming: bool = False) -> list
         if r["departure_date"] not in journeys:
             journeys[r["departure_date"]] = {
                 "date": r["departure_date"], "status": r["status"], "delay": r["delay_min"],
-                "current_delay": None, "forecast_delay": None, "estimated_departure": None, "estimated_arrival": None, "origin": None, "destination": None,
+                "current_delay": None, "forecast_delay": None, "last_station": None,
+                "actual_departure": None, "departure_delay": None, "estimated_departure": None, "estimated_arrival": None, "origin": None, "destination": None,
                 "planned_departure": None, "planned_arrival": None, "actual_arrival": None,
                 "operator": None, "product": None, "deviations": [], "source": r["source"] or "import",
                 "stops": [], "points": [], "segments": [],
@@ -958,7 +964,7 @@ def replayable_journeys(train: str = Query(max_length=10)):
     require_train(train)
 
     def compute():
-        return [{"date": j["date"], "status": j["status"], "delay": j["delay"]}
+        return [{"date": j["date"], "status": j["status"], "delay": j["delay"], "current_delay": j["current_delay"]}
                 for j in load_journeys(train, None) if len(j["points"]) > 1]
     return cached(("journeys", train), compute)
 
