@@ -230,13 +230,21 @@ function renderToday(journeys) {
   box.hidden = !latest;
   if (!latest) return;
   const isToday = latest.date === new Date().toLocaleDateString("sv-SE");
-  let label, detail;
+  let label, detail, badge = latest.status;
   const reason = latest.deviations.length ? ` ${latest.deviations.slice(0, 2).join(", ")}.` : "";
   if (latest.status === "pending") {
     const moving = latest.current_delay !== null;
     label = moving ? "På väg" : "Planerat";
     if (moving) {
-      detail = `Senast rapporterat: ${fmtDelay(latest.current_delay)}. Beräknad ankomst ${hhmm(latest.estimated_arrival || latest.planned_arrival)}.`;
+      label = latest.actual_departure ? "Har avgått" : "På väg";
+      badge = latest.current_delay > state.data.threshold ? "delayed" : "ontime";
+      const parts = [];
+      if (latest.actual_departure) parts.push(`Avgick från ${latest.origin} ${hhmm(latest.actual_departure)}, ${departureText(latest.departure_delay)}.`);
+      if (latest.last_station && latest.last_station !== latest.origin) {
+        parts.push(`Senast vid ${latest.last_station}: ${latest.current_delay > 0 ? `${latest.current_delay} min sent` : "i tid"}.`);
+      }
+      parts.push(`Beräknad ankomst ${latest.destination ?? "slutstationen"} ${hhmm(latest.estimated_arrival || latest.planned_arrival)}.`);
+      detail = parts.join(" ");
     } else if (latest.forecast_delay > 0) {
       label = "Väntas bli försenat";
       detail = forecastText(latest) + reason;
@@ -252,8 +260,14 @@ function renderToday(journeys) {
   }
   box.replaceChildren(
     el("strong", { text: isToday ? "I dag" : `Senaste avgång, ${fmtLongDate(latest.date)}` }),
-    statusBadge(latest.status === "pending" && latest.forecast_delay > 0 && latest.current_delay === null ? "delayed" : latest.status, label),
+    statusBadge(latest.status === "pending" && latest.forecast_delay > 0 && latest.current_delay === null ? "delayed" : badge, label),
     el("span", { class: "detail", text: detail }));
+}
+
+/** "i tid", "3 min sent" eller "2 min tidigt" för en avgång. */
+function departureText(delay) {
+  if (delay === null || delay === undefined) return "";
+  return delay > 0 ? `${delay} min sent` : delay < 0 ? `${-delay} min tidigt` : "i tid";
 }
 
 function forecastText(j) {
@@ -271,7 +285,7 @@ function renderUpcoming(upcoming) {
   const head = el("strong", { text: "Kommande avgångar" });
   if (!notable.length) {
     box.replaceChildren(head, el("span", { class: "detail",
-      text: `Inga kända inställningar eller förseningar t.o.m. ${fmtDate(last, { weekday: "short", day: "numeric", month: "short" })}.` }));
+      text: `Inga kända inställningar eller förseningar t.o.m. ${fmtDate(last, { weekday: "short", day: "numeric", month: "long" })}.` }));
     return;
   }
   const list = el("ul", { class: "upcoming-list" }, ...notable.map((j) => {
@@ -560,6 +574,7 @@ function lineJourney(journeys) {
 }
 
 function replayLabel(r) {
+  if (r.status === "pending") return `${fmtLongDate(r.date)} · ${r.current_delay !== null && r.current_delay !== undefined ? "på väg" : "planerat"}`;
   const outcome = (r.status === "ontime" || r.status === "delayed") && r.delay !== null
     ? (r.delay > 0 ? fmtDelay(r.delay) : "i tid") : STATUS[r.status].label.toLowerCase();
   return `${fmtLongDate(r.date)} · ${outcome}`;
@@ -803,7 +818,8 @@ function lineStatusText(j, points, r, real) {
       return `Planerad avgång ${hhmm(j.planned_departure)} från ${points[0].station}.` +
         (j.forecast_delay > 0 ? ` Väntas avgå ${hhmm(j.estimated_departure)} (${fmtDelay(j.forecast_delay)}).` : "");
     }
-    return `På väg, senast ${where}. ${j.current_delay > 0 ? `${j.current_delay} min efter tidtabell.` : "Enligt tidtabell."}`;
+    const dep = j.actual_departure ? `Avgick ${hhmm(j.actual_departure)}, ${departureText(j.departure_delay)}. ` : "";
+    return `${dep}På väg, senast ${where}. ${j.current_delay > 0 ? `${j.current_delay} min efter tidtabell.` : "Enligt tidtabell."}`;
   }
   if (real.stoppedAt !== null) return `Tåget kom inte längre än ${points[real.stoppedAt].station}, resten av sträckan ställdes in.`;
   if (j.delay !== null && j.delay > 0) {
