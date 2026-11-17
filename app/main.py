@@ -116,11 +116,13 @@ CREATE TABLE IF NOT EXISTS delay_segments (
 );
 """
 
-# Ungefärlig spårstandard för banorna som Karlstad–Stockholm-tågen trafikerar. Varje bana är en
+# Spårstandard för banorna som Karlstad–Stockholm-tågen trafikerar. Enligt användaren:
+# dubbelspår Karlstad C–Väse, enkelspår Väse–Laxå (bortsett från mötesplatser och bangårdar),
+# Laxå–Stockholm stambana med dubbelspår. Övriga banor är ungefärliga. Varje bana är en
 # lista (station, antal spår till nästa station). Används bara för sträckor som inte finns i
 # tabellen track_sections; sträckorna sparas där och kan rättas på adminsidan.
 DEFAULT_LINES = [
-    ("Värmlandsbanan", [("Kil", 1), ("Karlstad C", 2), ("Skattkärr", 1), ("Väse", 1), ("Ölme", 1),
+    ("Värmlandsbanan", [("Kil", 1), ("Karlstad C", 2), ("Skattkärr", 2), ("Väse", 1), ("Ölme", 1),
                         ("Kristinehamn", 1), ("Degerfors", 1), ("Laxå", None)]),
     ("Västra stambanan", [("Laxå", 2), ("Hasselfors", 2), ("Hallsberg", 2), ("Pålsboda", 2), ("Högsjö", 2),
                           ("Vingåker", 2), ("Katrineholm C", 2), ("Flen", 2), ("Sparreholm", 2), ("Gnesta", 2),
