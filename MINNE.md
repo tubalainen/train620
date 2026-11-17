@@ -3,7 +3,7 @@
 Överlämning mellan chattsessioner. Läs den här filen och `CLAUDE.md` först i en ny session,
 och uppdatera filen när något viktigt ändras (via PR, utan versionshöjning).
 
-*Senast uppdaterad: 2026-11-17, efter release v2.3.0, inför v2.3.1.*
+*Senast uppdaterad: 2026-11-17, inför v2.4.0.*
 
 ## Vad Tågkoll är
 
@@ -12,7 +12,8 @@ statistiken i en dashboard. Tåg 620 (Karlstad C → Stockholm C) och 643 (Stock
 Karlstad C, SJ Snabbtåg) bevakas.
 
 - **Dashboard `/`:** äldsta datapunkt per tåg, linjevy (ånglok + spöktåg enligt tidtabell,
-  enkel/dubbelspår, färgade förseningssträckor, uppspelning, utfällbar "Var uppstod
+  enkel/dubbelspår, färgade förseningssträckor, uppspelning, väljare för alla avgångar med
+  egna hållplatsdata (`/api/journeys` = lista, `/api/journey?train=&date=` = en avgång), utfällbar "Var uppstod
   förseningen?"; ett framkommet tåg står vid slutstationen, pågående visas nu-läget,
   inställda/delvis inställda står kvar där de stannade), punktlighet, försenade/inställda, medelförsening, försening per avgång,
   vecka, veckodag och station, samt tabell med alla avgångar (utfällbar per station).
@@ -93,6 +94,10 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
   ligger i `historik/`, som är undantagen i `.gitignore`.
 
 ## Releaser
+
+- **v2.4.0** (PR, ej släppt ännu): välj och spela upp vilken insamlad avgång som helst i linjekortet.
+  Importerade dagar kan inte spelas upp (bara slutförsening) – användaren är införstådd. Användaren
+  ville *bara* väljare + befintlig uppspelning, inga fler kontroller (paus, reglage, hastighet).
 
 - **v2.1.0** (2026-11-17): linjevy, `delay_segments`/`track_sections`, datans ålder, spår i admin.
   Release-körningen och `docker pull` utan inloggning kontrollerade. Användaren har uppgraderat

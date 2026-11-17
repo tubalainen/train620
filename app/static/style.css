@@ -221,7 +221,8 @@ footer .privacy ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; max
 .line-card { margin: 0 0 16px; }
 .line-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px 16px; flex-wrap: wrap; }
 .line-head .sub { margin-bottom: 4px; }
-.line-actions { display: flex; align-items: center; gap: 10px; }
+.line-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.line-pick { max-width: 100%; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font: inherit; font-size: 14px; color: inherit; }
 .line-clock { color: var(--ink-2); font-size: 13px; font-variant-numeric: tabular-nums; }
 .line-chart { width: 100%; }
 .line-svg { display: block; width: 100%; overflow: visible; }

@@ -21,6 +21,8 @@ const state = {
   days: localStorage.getItem("days") ?? "30",
   data: null,
   lineDate: null,
+  lineExtra: null,   // en äldre avgång som hämtats separat för uppspelning
+  replayable: [],    // alla avgångar med hållplatsdata, nyast först
 };
 
 // ------------------------------------------------------------------ helpers
@@ -512,14 +514,57 @@ function stopPlay() {
 
 function lineJourney(journeys) {
   const withPoints = journeys.filter((j) => j.points.length > 1);
-  return withPoints.find((j) => j.date === state.lineDate) ?? withPoints[0] ?? null;
+  if (state.lineDate) {
+    const hit = withPoints.find((j) => j.date === state.lineDate) ??
+      (state.lineExtra?.date === state.lineDate ? state.lineExtra : null);
+    if (hit) return hit;
+  }
+  return withPoints[0] ?? null;
 }
+
+function replayLabel(r) {
+  const outcome = (r.status === "ontime" || r.status === "delayed") && r.delay !== null
+    ? (r.delay > 0 ? fmtDelay(r.delay) : "i tid") : STATUS[r.status].label.toLowerCase();
+  return `${fmtLongDate(r.date)} · ${outcome}`;
+}
+
+/** Väljaren med alla avgångar som går att spela upp (bara dagar med egna hållplatsdata). */
+function renderLinePicker(date) {
+  const pick = $("line-date");
+  const list = state.replayable.some((r) => r.date === date) ? state.replayable : [{ date, status: "unknown", delay: null }, ...state.replayable];
+  const key = list.map((r) => `${r.date}${r.status}${r.delay}`).join();
+  if (pick.dataset.key !== key) {
+    pick.replaceChildren(...list.map((r) => el("option", { value: r.date, text: replayLabel(r) })));
+    pick.dataset.key = key;
+  }
+  pick.value = date;
+}
+
+async function pickLineDate(date) {
+  const train = state.train;
+  state.lineDate = date;
+  stopPlay();
+  const inStats = state.data?.journeys.some((j) => j.date === date && j.points.length > 1);
+  if (!inStats && state.lineExtra?.date !== date) {
+    try {
+      state.lineExtra = await api(`/api/journey?${new URLSearchParams({ train, date })}`);
+    } catch (e) {
+      if (state.train === train) showMessage(e.message);
+    }
+  }
+  if (state.train === train && state.lineDate === date && !linePlay) renderLine();
+}
+
+$("line-date").addEventListener("change", (e) => pickLineDate(e.target.value));
 
 function renderLine() {
   const card = $("line-card");
   const j = state.data ? lineJourney(state.data.journeys) : null;
+  // Perioden kan sakna avgångar med hållplatsdata fast äldre finns – visa då den senaste av dem.
+  if (!j && !state.lineDate && state.replayable.length) { pickLineDate(state.replayable[0].date); return; }
   card.hidden = !j;
   if (!j || linePlay) return;
+  renderLinePicker(j.date);
   const box = $("line");
   box.replaceChildren();
   const points = j.points;
@@ -785,9 +830,7 @@ function renderDelayDetails(j) {
 }
 
 function showOnLine(date) {
-  state.lineDate = date;
-  stopPlay();
-  renderLine();
+  pickLineDate(date);
   $("delay-details").open = true;
   $("line-card").scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -850,7 +893,12 @@ async function loadStats() {
   try {
     const q = new URLSearchParams({ train: state.train });
     if (state.days) q.set("days", state.days);
-    state.data = await api(`/api/stats?${q}`);
+    const [data, replayable] = await Promise.all([
+      api(`/api/stats?${q}`),
+      api(`/api/journeys?${new URLSearchParams({ train: state.train })}`).catch(() => state.replayable),
+    ]);
+    state.data = data;
+    state.replayable = replayable;
     render();
   } finally {
     $("charts").classList.remove("loading");
@@ -867,6 +915,8 @@ async function loadTrains() {
 function selectTrain(ident) {
   state.train = ident;
   state.lineDate = null;
+  state.lineExtra = null;
+  state.replayable = [];
   stopPlay();
   localStorage.setItem("train", ident);
   renderTrains();
