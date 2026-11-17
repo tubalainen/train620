@@ -2,6 +2,12 @@
 
 Varje release får ett avsnitt `## [x.y.z] - ÅÅÅÅ-MM-DD`. Avsnittet blir releasetexten på GitHub.
 
+## [2.1.5] - 2026-11-17
+
+- Spåren på linjen följer nu: dubbelspår Karlstad C–Skattkärr, enkelspår Skattkärr–Laxå och dubbelspår (stambanan) Laxå–Stockholm C. Samma sak gäller tåg 643 i motsatt riktning.
+- Trafikverket rapporterar inte alltid tåget i Laxå, utan nästa plats efter Svartå kan vara Hasselfors. En sådan sträcka visades tidigare som dubbelspår. Nu delas den vid Laxå: enkelspår fram till Laxå och dubbelspår därefter, med Laxå utmärkt på linjen.
+- Rättar texten ovanför linjen för ett tåg som är på väg: den säger nu var tåget är just nu.
+
 ## [2.1.4] - 2026-11-17
 
 - Rättar spåren på Värmlandsbanan igen: dubbelspår mellan Karlstad C och Skattkärr och enkelspår hela vägen från Skattkärr till Laxå. I 2.1.3 visades Skattkärr–Väse felaktigt som dubbelspår. Från Laxå till Stockholm är det dubbelspår. Ändringen slår igenom vid första hämtningen efter uppgraderingen. Sträckor du själv har ändrat på adminsidan behålls.

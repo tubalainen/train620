@@ -117,13 +117,14 @@ CREATE TABLE IF NOT EXISTS delay_segments (
 """
 
 # Spårstandard för banorna som Karlstad–Stockholm-tågen trafikerar. Enligt användaren:
-# dubbelspår Karlstad C–Skattkärr, enkelspår Skattkärr–Laxå,
-# Laxå–Stockholm stambana med dubbelspår. Övriga banor är ungefärliga. Varje bana är en
+# Karlstad C–Skattkärr dubbelspår, Skattkärr–Laxå enkelspår, Laxå–Stockholm C dubbelspår
+# (stambana). Trafikverket rapporterar inte alltid tåget i Laxå (t.ex. Svartå → Hasselfors);
+# en sådan sträcka delas vid Laxå, se guess_section. Övriga banor är ungefärliga. Varje bana är en
 # lista (station, antal spår till nästa station). Används bara för sträckor som inte finns i
 # tabellen track_sections; sträckorna sparas där och kan rättas på adminsidan.
 DEFAULT_LINES = [
     ("Värmlandsbanan", [("Kil", 1), ("Karlstad C", 2), ("Skattkärr", 1), ("Väse", 1), ("Ölme", 1),
-                        ("Kristinehamn", 1), ("Degerfors", 1), ("Laxå", None)]),
+                        ("Kristinehamn", 1), ("Degerfors", 1), ("Svartå", 1), ("Laxå", None)]),
     ("Västra stambanan", [("Laxå", 2), ("Hasselfors", 2), ("Hallsberg", 2), ("Pålsboda", 2), ("Högsjö", 2),
                           ("Vingåker", 2), ("Katrineholm C", 2), ("Flen", 2), ("Sparreholm", 2), ("Gnesta", 2),
                           ("Mölnbo", 2), ("Järna", 2), ("Södertälje Syd", 2), ("Flemingsberg", 2),
@@ -327,13 +328,14 @@ def _line_tracks(line: str, ia: int, ib: int) -> int | None:
     return None if not counts or None in counts else min(counts)
 
 
-def guess_section(points: list[dict], i: int) -> tuple[int | None, str | None]:
+def guess_section(points: list[dict], i: int) -> tuple[int | None, str | None, dict | None]:
     """Gissar antal spår mellan punkt i och i+1 ur DEFAULT_LINES.
 
-    Punkter som inte finns i någon bana (t.ex. driftplatser utan resandeutbyte) får samma bana
-    som de närmaste kända stationerna före och efter. Ligger de kända stationerna på två olika
-    banor som möts i en knutpunkt (t.ex. Laxå) räknas sträckan till den första banan fram till
-    halva tiden mellan stationerna och till den andra därefter.
+    Returnerar (antal spår, bana, delning). Punkter som inte finns i någon bana (t.ex.
+    driftplatser utan resandeutbyte) får samma bana som de närmaste kända stationerna före och
+    efter. Ligger de kända stationerna på två olika banor som möts i en knutpunkt (t.ex. Laxå)
+    uppskattas knutpunktens tid utifrån antalet stationer på vardera banan. En sträcka som går
+    förbi knutpunkten delas där: {"at", "fraction", "before", "after"}.
     """
     def known(k):
         return _LINE_INDEX.get(station_key(points[k]["station"]))
@@ -345,14 +347,14 @@ def guess_section(points: list[dict], i: int) -> tuple[int | None, str | None]:
     a = next((k for k in range(i, -1, -1) if known(k)), None)
     b = next((k for k in range(i + 1, len(points)) if known(k)), None)
     if a is None or b is None:
-        return None, None
+        return None, None, None
     best = None
     for line, ia in known(a):
         for line_b, ib in known(b):
             if line == line_b and ia != ib and (best is None or abs(ia - ib) < best[0]):
                 best = (abs(ia - ib), _line_tracks(line, ia, ib), line)
     if best:
-        return best[1], best[2]
+        return best[1], best[2], None
     # Olika banor: leta upp en gemensam knutpunkt.
     for line_a, ia in known(a):
         for line_b, ib in known(b):
@@ -361,12 +363,22 @@ def guess_section(points: list[dict], i: int) -> tuple[int | None, str | None]:
                 if not hits_b or line_a == line_b:
                     continue
                 ja = next(k for k, (n, _) in enumerate(_LINES[line_a]) if n == name)
+                jb = hits_b[0]
+                before, after = _line_tracks(line_a, ia, ja), _line_tracks(line_b, jb, ib)
                 ta, tb, ti, tj = t(a), t(b), t(i), t(i + 1)
-                first = None in (ta, tb, ti, tj) or (ti + tj) / 2 < (ta + tb) / 2
-                if first:
-                    return _line_tracks(line_a, ia, ja), line_a
-                return _line_tracks(line_b, hits_b[0], ib), line_b
-    return None, None
+                if None in (ta, tb, ti, tj):
+                    return before, line_a, None
+                hops_a, hops_b = abs(ja - ia), abs(ib - jb)
+                t_junction = ta + (tb - ta) * (hops_a / (hops_a + hops_b) if hops_a + hops_b else 0.5)
+                if tj <= t_junction:
+                    return before, line_a, None
+                if ti >= t_junction:
+                    return after, line_b, None
+                split = {"at": name, "fraction": round((t_junction - ti) / (tj - ti), 3),
+                         "before": before, "after": after}
+                tracks = min(x for x in (before, after) if x is not None) if (before or after) else None
+                return tracks, f"{line_a} / {line_b} (byte i {name})", split
+    return None, None, None
 
 
 def journey_points(ordered: list[sqlite3.Row], names: dict[str, str]) -> list[dict]:
@@ -429,8 +441,9 @@ def journey_segments(points: list[dict], tracks: dict[tuple[str, str], dict]) ->
         known = tracks.get(pair_key(p["sig"], q["sig"]))
         if known and known["source"] == "admin":
             n_tracks, line, source = known["tracks"], known["line"], known["source"]
+            split = None
         else:
-            n_tracks, line = guess_section(points, i)
+            n_tracks, line, split = guess_section(points, i)
             source = "inbyggd"
         a, b = d_out(p), d_in(q)
         out.append({
@@ -438,7 +451,7 @@ def journey_segments(points: list[dict], tracks: dict[tuple[str, str], dict]) ->
             "planned_from": p["planned_dep"] or p["planned_arr"], "planned_to": q["planned_arr"] or q["planned_dep"],
             "delay_from": a, "delay_to": b, "added": b - a if a is not None and b is not None else None,
             "canceled": bool(p["canceled_dep"] or q["canceled_arr"] or (p["canceled"] and q["canceled"])),
-            "tracks": n_tracks, "line": line, "track_source": source,
+            "tracks": n_tracks, "line": line, "track_source": source, "split": split,
             "deviations": [d for d in q["deviations"] if d not in p["deviations"]] or q["deviations"],
         })
     return out

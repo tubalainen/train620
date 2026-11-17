@@ -428,6 +428,9 @@ function ageText(t) {
 // ------------------------------------------------------------------- linjen
 const ms = (iso) => (iso ? Date.parse(iso) : null);
 const TRACKS = { 1: "Enkelspår", 2: "Dubbelspår" };
+const segTrackLabel = (s) => (s.split
+  ? `${trackLabel(s.split.before)} till ${s.split.at}, sedan ${trackLabel(s.split.after).toLowerCase()}`
+  : trackLabel(s.tracks));
 const trackLabel = (n) => (n === "mixed" ? "Enkel- och dubbelspår" : TRACKS[n] ?? "Okänt antal spår");
 
 function segmentColor(s) {
@@ -539,17 +542,28 @@ function renderLine() {
     const x1 = xOf(k), x2 = xOf(k + 1);
     const color = segmentColor(s);
     const g = svg("g", { class: "seg" }, root);
-    const offsets = s.tracks === 2 ? [-3.5, 3.5] : [0];
-    for (const dy of offsets) {
-      svg("line", { x1, x2, y1: railY + dy, y2: railY + dy, stroke: color, "stroke-width": s.tracks === 2 ? 2.5 : 3.5,
-        "stroke-dasharray": s.tracks ? null : "5 4", "stroke-linecap": "butt" }, g);
+    // En sträcka som går förbi en knutpunkt utan rapport (t.ex. Laxå) ritas i två delar.
+    const xm = s.split ? x1 + (x2 - x1) * s.split.fraction : x2;
+    const parts = s.split ? [[x1, xm, s.split.before], [xm, x2, s.split.after]] : [[x1, x2, s.tracks]];
+    for (const [a, b, n] of parts) {
+      for (const dy of n === 2 ? [-3.5, 3.5] : [0]) {
+        svg("line", { x1: a, x2: b, y1: railY + dy, y2: railY + dy, stroke: color, "stroke-width": n === 2 ? 2.5 : 3.5,
+          "stroke-dasharray": n ? null : "5 4", "stroke-linecap": "butt" }, g);
+      }
+    }
+    if (s.split) {
+      svg("line", { x1: xm, x2: xm, y1: railY - 7, y2: railY + 7, class: "junction" }, g);
+      if (x2 - x1 > 70) {
+        const t = svg("text", { x: xm, y: railY - 12, "text-anchor": "middle", class: "junction-label" }, g);
+        t.textContent = s.split.at;
+      }
     }
     if (s.canceled) svg("line", { x1, x2, y1: railY, y2: railY, class: "strike" }, g);
     svg("rect", { class: "hit", x: x1, y: railY - 16, width: Math.max(2, x2 - x1), height: 32 }, g);
     const tipData = {
       color, label: `${s.from} → ${s.to}`,
       value: s.canceled ? "Inställd sträcka" : s.added === null ? "Ej körd ännu" : `${s.added > 0 ? "+" : ""}${s.added} min på sträckan`,
-      extra: [trackLabel(s.tracks), s.line, ...s.deviations].filter(Boolean).join(" · "),
+      extra: [segTrackLabel(s), s.line, ...s.deviations].filter(Boolean).join(" · "),
     };
     g.addEventListener("pointermove", (e) => { g.classList.add("hover"); showTip(e, tipData); });
     g.addEventListener("pointerleave", () => { g.classList.remove("hover"); hideTip(); });
@@ -667,7 +681,7 @@ function renderLine() {
 
   const r = update(defaultT, false);
   $("line-title").textContent = `Linjen · ${fmtLongDate(j.date)}`;
-  $("line-sub").textContent = lineStatusText(j, points, fullyCanceled ? r : positionAt(real, arrival, xOf), real);
+  $("line-sub").textContent = lineStatusText(j, points, fullyCanceled || j.status === "pending" ? r : positionAt(real, arrival, xOf), real);
   $("line-play").onclick = () => {
     if (linePlay) { stopPlay(); update(defaultT, false); return; }
     const duration = 8000, began = performance.now();
@@ -727,7 +741,7 @@ function renderDelayDetails(j) {
   else if (worst.length) {
     const s = worst[0];
     summary = `+${s.added} min ${s.kind === "stop" ? `vid uppehållet i ${s.from}` : `mellan ${s.from} och ${s.to}`}` +
-      (s.kind === "run" ? `, ${trackLabel(s.tracks).toLowerCase()}` : "") + (worst.length > 1 ? ` och ${worst.length - 1} ${worst.length === 2 ? "ställe" : "ställen"} till` : "");
+      (s.kind === "run" ? `, ${segTrackLabel(s).toLowerCase()}` : "") + (worst.length > 1 ? ` och ${worst.length - 1} ${worst.length === 2 ? "ställe" : "ställen"} till` : "");
   } else summary = segs.some((s) => s.added !== null) ? "Ingen försening uppstod längs vägen." : "Inga rapporterade tider ännu.";
   $("delay-summary").textContent = summary;
 
@@ -736,7 +750,7 @@ function renderDelayDetails(j) {
   for (const s of segs) {
     const prev = merged[merged.length - 1];
     if (prev && prev.canceled && s.canceled && s.kind === "run" && prev.kind === "run") {
-      merged[merged.length - 1] = { ...prev, to: s.to, tracks: prev.tracks === s.tracks ? s.tracks : "mixed",
+      merged[merged.length - 1] = { ...prev, to: s.to, tracks: prev.tracks === s.tracks && !prev.split && !s.split ? s.tracks : "mixed", split: null,
         line: prev.line === s.line ? s.line : null, deviations: [...new Set([...prev.deviations, ...s.deviations])] };
     } else merged.push(s);
   }
@@ -744,7 +758,7 @@ function renderDelayDetails(j) {
   const hiddenCount = merged.length - shown.length;
   const rows = shown.map((s) => el("tr", { class: s.canceled ? "canceled" : "" },
     el("td", {}, el("span", { class: "swatch", style: `background:${segmentColor(s)}` }), document.createTextNode(name(s))),
-    el("td", {}, document.createTextNode(s.kind === "stop" ? "–" : trackLabel(s.tracks)),
+    el("td", {}, document.createTextNode(s.kind === "stop" ? "–" : segTrackLabel(s)),
       s.kind === "run" && s.line ? el("span", { class: "line-name", text: ` (${s.line})` }) : null),
     el("td", { class: "num", text: s.canceled ? "–" : `${fmtDelay(s.delay_from)} → ${fmtDelay(s.delay_to)}` }),
     el("td", { class: "num strong", text: s.canceled ? "Inställd" : s.added === null ? "–" : `${s.added > 0 ? "+" : s.added < 0 ? "−" : ""}${Math.abs(s.added)} min` }),
