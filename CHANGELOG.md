@@ -4,7 +4,9 @@ Varje release får ett avsnitt `## [x.y.z] - ÅÅÅÅ-MM-DD`. Avsnittet blir rel
 
 ## [2.1.5] - 2026-11-17
 
-- Rättar spåren mellan Degerfors och stambanan. Tågen kör Degerfors–Svartå–Hasselfors och passerar inte Laxå. Därför blev sträckan Svartå–Hasselfors felaktigt dubbelspår. Nu är det enkelspår hela vägen från Skattkärr tills tåget når Västra stambanan i Hasselfors, och dubbelspår därifrån till Stockholm. Ändringen slår igenom vid första hämtningen efter uppgraderingen.
+- Spåren på linjen följer nu: dubbelspår Karlstad C–Skattkärr, enkelspår Skattkärr–Laxå och dubbelspår (stambanan) Laxå–Stockholm C. Samma sak gäller tåg 643 i motsatt riktning.
+- Trafikverket rapporterar inte alltid tåget i Laxå, utan nästa plats efter Svartå kan vara Hasselfors. En sådan sträcka visades tidigare som dubbelspår. Nu delas den vid Laxå: enkelspår fram till Laxå och dubbelspår därefter, med Laxå utmärkt på linjen.
+- Rättar texten ovanför linjen för ett tåg som är på väg: den säger nu var tåget är just nu.
 
 ## [2.1.4] - 2026-11-17
 

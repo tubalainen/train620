@@ -225,6 +225,8 @@ footer { padding-top: 22px; padding-bottom: 40px; color: var(--muted); font-size
 .line-svg .seg.hover line { filter: brightness(1.2); }
 .line-svg .seg.hover .hit { fill: var(--wash); }
 .line-svg .strike { stroke: var(--surface); stroke-width: 1.5; stroke-dasharray: 3 5; }
+.line-svg .junction { stroke: var(--ink-2); stroke-width: 1.5; }
+.line-svg text.junction-label { fill: var(--muted); font-size: 10.5px; }
 .line-svg .dot { fill: var(--surface); stroke: var(--ink-2); stroke-width: 2; }
 .line-svg .dot[stroke] { stroke-width: 3.5; }
 .line-svg .dot.canceled { stroke: var(--critical); }

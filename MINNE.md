@@ -101,7 +101,7 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
   banor, inbyggda spårrader räknas om vid varje hämtning. Release och `docker pull` kontrollerade.
 - **v2.1.3** (2026-11-17): dubbelspår Karlstad C–Väse – blev fel, användaren tog tillbaka det.
 - **v2.1.4** (2026-11-17): dubbelspår Karlstad C–Skattkärr, enkelspår Skattkärr–Laxå.
-- **v2.1.5**: Svartå med i Värmlandsbanan och enkelspår Svartå–Hasselfors.
+- **v2.1.5**: Svartå med i Värmlandsbanan, sträckor förbi Laxå delas vid Laxå, rättad statustext för pågående tåg.
 
 ## Användarens preferenser
 
