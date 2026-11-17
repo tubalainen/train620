@@ -106,7 +106,7 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
   avgång, framme och inställt = ingen rök). Lokets färg efter `r.delay` (`locoColor`): grön ≤1 min →
   orange (`--late`) vid 6 min → röd (`--critical`) från 20 min; inställt behåller `--ink`. Gränserna
   valde Claude själv – användaren har inte kommenterat dem. Testat med testdatabas för 620 (ej 643).
-  Användaren har inte uppgraderat totoro eller bekräftat 2.5.2 än.
+  Användaren har uppgraderat totoro till 2.5.2 och bekräftat att det ser bra ut.
 - **v2.5.1** (2026-11-17), släppt och kontrollerad (PR #25, Release #18, `docker pull` av `2.5.1` och
   `latest` utan inloggning, samma image): *I dag* visar "Har avgått" + avgångstid och om den var i
   tid (`actual_departure`, `departure_delay`, `last_station`). Användarens skärmbild före 2.5.1 visade
