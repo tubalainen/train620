@@ -3,7 +3,7 @@
 Överlämning mellan chattsessioner. Läs den här filen och `CLAUDE.md` först i en ny session,
 och uppdatera filen när något viktigt ändras (direkt till `main`, utan PR och release).
 
-*Senast uppdaterad: 2026-11-17, efter release v2.5.0.*
+*Senast uppdaterad: 2026-11-17, efter release v2.5.1.*
 
 ## Vad Tågkoll är
 
@@ -100,6 +100,10 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
 
 ## Releaser
 
+- **v2.5.1** (2026-11-17), släppt och kontrollerad (PR #25, Release #18, `docker pull` av `2.5.1` och
+  `latest` utan inloggning, samma image): *I dag* visar "Har avgått" + avgångstid och om den var i
+  tid (`actual_departure`, `departure_delay`, `last_station`). Användarens skärmbild före 2.5.1 visade
+  att hämtningen framåt fungerar mot Trafikverket (*Kommande* t.o.m. 7 dagar fram).
 - **v2.5.0** (2026-11-17), släppt och kontrollerad (PR #24, Release #17, `docker pull` av `2.5.0` och
   `latest` utan inloggning, samma image, `DAYS_AHEAD` och *Kommande avgångar* finns i imagen):
   kommande avgångar 7 dagar framåt och prognos före avgång. Ej provat mot riktiga data, se öppna punkter.
@@ -185,9 +189,7 @@ Användarens slutliga besked (efter flera rundor 2.1.2–2.1.5):
 - Besöksräknaren läser IP från `CF-Connecting-IP`/`X-Forwarded-For`. Om användarens Nginx
   Proxy Manager inte skickar vidare dem blir alla besökare samma IP (bara webbläsaren skiljer)
   och siffran blir för låg. Be användaren säga till om siffran ser konstig ut.
-- 2.5.0 är inte provat mot Trafikverket (ingen nyckel i molnsessionen). Kontrollera med riktiga
-  data: att `$dateadd` med positivt värde godtas och att kommande dagar faktiskt kommer med (hur
-  långt fram Trafikverket publicerar är okänt), och om avgångar som ställs in långt i förväg
+- 2.5.0: hämtningen framåt fungerar mot Trafikverket (bekräftat med skärmbild). Okänt än: om avgångar som ställs in långt i förväg
   markeras som inställda eller tas bort helt (då blir dagen en lucka i stället för *Inställt*).
 - Användaren har inte bekräftat väljaren i 2.4.0 med riktiga data (testat bara med testdatabas för
   620 och 643). Fråga om listan och uppspelningen av äldre avgångar ser rätt ut.
