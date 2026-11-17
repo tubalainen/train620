@@ -620,9 +620,11 @@ function renderLine() {
   const fullyCanceled = j.status === "cancelled";
   const arrival = ms(points[points.length - 1].planned_arr ?? points[points.length - 1].planned_dep);
   const lastReal = real.seq.length ? real.seq[real.seq.length - 1].t : arrival;
-  const defaultT = j.status === "pending" ? Date.now() : arrival;
   const startT = ms(points[0].planned_dep ?? points[0].planned_arr);
   const endT = j.status === "pending" ? Math.max(Date.now(), startT) : Math.max(arrival, lastReal);
+  // Ett tåg som har kommit fram visas framme vid slutstationen; uppspelningen visar resan dit.
+  const arrived = j.status !== "pending" && !fullyCanceled && real.stoppedAt === null;
+  const defaultT = j.status === "pending" ? Date.now() : arrived ? endT : arrival;
 
   function update(t, playing) {
     const r = fullyCanceled ? { x: xOf(0), delay: 0, index: 0 } : positionAt(real, t, xOf);
@@ -659,13 +661,13 @@ function renderLine() {
       signText.setAttribute("y", tagY - 4);
     }
     $("line-clock").textContent = `kl ${new Date(t).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Stockholm" })}` +
-      (playing ? "" : j.status === "pending" ? " (nu)" : " (planerad ankomst)");
+      (playing ? "" : j.status === "pending" ? " (nu)" : arrived ? " (framme)" : " (planerad ankomst)");
     return r;
   }
 
   const r = update(defaultT, false);
   $("line-title").textContent = `Linjen · ${fmtLongDate(j.date)}`;
-  $("line-sub").textContent = lineStatusText(j, points, r, real);
+  $("line-sub").textContent = lineStatusText(j, points, fullyCanceled ? r : positionAt(real, arrival, xOf), real);
   $("line-play").onclick = () => {
     if (linePlay) { stopPlay(); update(defaultT, false); return; }
     const duration = 8000, began = performance.now();
@@ -707,7 +709,8 @@ function lineStatusText(j, points, r, real) {
   }
   if (real.stoppedAt !== null) return `Tåget kom inte längre än ${points[real.stoppedAt].station}, resten av sträckan ställdes in.`;
   if (j.delay !== null && j.delay > 0) {
-    return `När tåget skulle ha varit framme (${hhmm(j.planned_arrival)}) var det ${where}. Ankom ${hhmm(j.actual_arrival)}, ${j.delay} min sent.`;
+    return `Framme i ${points[points.length - 1].station} ${hhmm(j.actual_arrival)}, ${j.delay} min sent. ` +
+      `När tåget skulle ha varit framme (${hhmm(j.planned_arrival)}) var det ${where} – spela upp resan för att se var förseningen uppstod.`;
   }
   return `Tåget kom fram ${hhmm(j.actual_arrival)}, ${j.delay < 0 ? `${-j.delay} min före tidtabell` : "enligt tidtabell"}.`;
 }
