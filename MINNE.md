@@ -3,7 +3,7 @@
 Överlämning mellan chattsessioner. Läs den här filen och `CLAUDE.md` först i en ny session,
 och uppdatera filen när något viktigt ändras (via PR, utan versionshöjning).
 
-*Senast uppdaterad: 2026-11-17, inför v2.4.0.*
+*Senast uppdaterad: 2026-11-17, efter release v2.4.0.*
 
 ## Vad Tågkoll är
 
@@ -95,7 +95,8 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
 
 ## Releaser
 
-- **v2.4.0** (PR, ej släppt ännu): välj och spela upp vilken insamlad avgång som helst i linjekortet.
+- **v2.4.0** (2026-11-17), släppt och kontrollerad (PR #23, Release-körning #16, `docker pull` av
+  `2.4.0` och `latest` utan inloggning, samma image, väljaren finns i imagen): välj och spela upp vilken insamlad avgång som helst i linjekortet.
   Importerade dagar kan inte spelas upp (bara slutförsening) – användaren är införstådd. Användaren
   ville *bara* väljare + befintlig uppspelning, inga fler kontroller (paus, reglage, hastighet).
 
@@ -157,6 +158,8 @@ Användarens slutliga besked (efter flera rundor 2.1.2–2.1.5):
 - Svenska i allt som användaren ser.
 - Varje uppdatering: PR mot `main` → grön *Build* → användaren säger "merga" → release →
   kontrollera `docker pull` utan inloggning och rapportera. Se `CLAUDE.md`.
+- `MINNE.md` (bara den filen) får pushas direkt till `main` utan PR och utan release – användarens
+  besked 2026-11-17. Allt annat går via PR enligt `CLAUDE.md`.
 - Versionsregel: mindre → `0.0.x`, halvstor → `0.x.0`, major → `x.0.0`. Fråga vid tvekan.
 - Kontrollera innan du säger att något inte går, och förklara då konkret varför (t.ex. vad
   ett test faktiskt svarade).
@@ -166,6 +169,8 @@ Användarens slutliga besked (efter flera rundor 2.1.2–2.1.5):
 - Besöksräknaren läser IP från `CF-Connecting-IP`/`X-Forwarded-For`. Om användarens Nginx
   Proxy Manager inte skickar vidare dem blir alla besökare samma IP (bara webbläsaren skiljer)
   och siffran blir för låg. Be användaren säga till om siffran ser konstig ut.
+- Användaren har inte bekräftat väljaren i 2.4.0 med riktiga data (testat bara med testdatabas för
+  620 och 643). Fråga om listan och uppspelningen av äldre avgångar ser rätt ut.
 - Användaren har inte bekräftat 2.1.6 med riktiga data. Fråga om linjen ser rätt ut för både
   620 och 643 (spår och Laxå-markering), och om inget står som "Okänt" under *Spår på sträckorna* på /admin.
 - Det är okänt varför en bit efter Degerfors visades som "okänt" i 2.1.0 (troligen ett
