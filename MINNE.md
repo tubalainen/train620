@@ -158,8 +158,9 @@ Användarens slutliga besked (efter flera rundor 2.1.2–2.1.5):
 - Svenska i allt som användaren ser.
 - Varje uppdatering: PR mot `main` → grön *Build* → användaren säger "merga" → release →
   kontrollera `docker pull` utan inloggning och rapportera. Se `CLAUDE.md`.
-- `MINNE.md` (bara den filen) får pushas direkt till `main` utan PR och utan release – användarens
-  besked 2026-11-17. Allt annat går via PR enligt `CLAUDE.md`.
+- PR, merge och release **bara för funktionella ändringar** (sådant som påverkar imagen). Övrigt –
+  `MINNE.md`, `CLAUDE.md`, annan dokumentation – pushas direkt till `main` utan PR och release
+  (användarens besked 2026-11-17).
 - Versionsregel: mindre → `0.0.x`, halvstor → `0.x.0`, major → `x.0.0`. Fråga vid tvekan.
 - Kontrollera innan du säger att något inte går, och förklara då konkret varför (t.ex. vad
   ett test faktiskt svarade).

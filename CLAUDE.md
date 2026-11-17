@@ -11,7 +11,8 @@ punkter. Uppdatera den när något viktigt ändras.
 
 Varje uppdatering går till `main` via en pull request och avslutas med en release.
 
-1. Gör ändringen på en arbetsgren och öppna en PR mot `main`. Pusha aldrig direkt till `main`.
+1. Gör ändringen på en arbetsgren och öppna en PR mot `main`. Pusha aldrig funktionella ändringar
+   direkt till `main`.
 2. I samma PR: höj `VERSION` och lägg till ett avsnitt `## [x.y.z] - ÅÅÅÅ-MM-DD` överst i
    `CHANGELOG.md`. Avsnittet blir releasetexten, så skriv det för den som använder appen.
 3. Vänta tills arbetsflödet *Build* är grönt.
@@ -34,8 +35,9 @@ Versionsnummer `x.y.z` väljs efter hur stor ändringen är (användarens regel)
 
 Är det oklart vilken nivå en ändring hör till, fråga användaren innan release-PR:en öppnas.
 
-Ändringar som inte påverkar imagen (dokumentation, arbetsflöden, den här filen) mergas via PR
-utan versionshöjning och ger ingen release.
+PR, merge och release görs **bara för funktionella ändringar**, dvs. sådant som påverkar imagen.
+Ändringar som inte påverkar imagen (`MINNE.md`, den här filen, annan dokumentation) pushas direkt
+till `main` utan PR, versionshöjning eller release.
 
 ## Hemligheter
 
