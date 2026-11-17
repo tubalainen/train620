@@ -64,9 +64,8 @@ jobs:
         id: pipaudit
         continue-on-error: true
         run: |
-          python3 -m pip install --quiet pip-audit
           set -o pipefail
-          pip-audit --requirement requirements.txt --strict --progress-spinner off --desc on 2>&1 | tee pip-audit-report.txt
+          pipx run pip-audit --requirement requirements.txt --strict --progress-spinner off --desc on 2>&1 | tee pip-audit-report.txt
 
       - name: Visa rapport
         if: always()

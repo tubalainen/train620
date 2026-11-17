@@ -50,5 +50,4 @@ jobs:
 
       - name: Inga kända sårbarheter i Python-paketen
         run: |
-          python3 -m pip install --quiet pip-audit
-          pip-audit --requirement requirements.txt --strict --progress-spinner off
+          pipx run pip-audit --requirement requirements.txt --strict --progress-spinner off
