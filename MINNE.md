@@ -3,7 +3,7 @@
 Överlämning mellan chattsessioner. Läs den här filen och `CLAUDE.md` först i en ny session,
 och uppdatera filen när något viktigt ändras (via PR, utan versionshöjning).
 
-*Senast uppdaterad: 2026-11-17, efter release v2.1.0 (linjevy), inför v2.1.1.*
+*Senast uppdaterad: 2026-11-17, efter release v2.1.1, inför v2.1.2.*
 
 ## Vad Tågkoll är
 
@@ -93,8 +93,10 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
 - **v2.1.0** (2026-11-17): linjevy, `delay_segments`/`track_sections`, datans ålder, spår i admin.
   Release-körningen och `docker pull` utan inloggning kontrollerade. Användaren har uppgraderat
   på totoro; en skärmbild visade linjen för 620 med riktiga data.
-- **v2.1.1**: framkomna tåg visas vid slutstationen (användaren tyckte att läget vid planerad
-  ankomst var förvirrande; uppspelningen gillades).
+- **v2.1.1** (2026-11-17): framkomna tåg visas vid slutstationen (användaren tyckte att läget
+  vid planerad ankomst var förvirrande; uppspelningen gillades). Release-körningen gick igenom
+  och `docker pull` av `2.1.1` och `latest` fungerar utan inloggning. `latest` pekade på den
+  gamla versionen några sekunder in i körningen – vänta tills *Release* är klar innan kontroll.
 
 ## Användarens preferenser
 
@@ -107,9 +109,13 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
 
 ## Öppna punkter
 
-- Spårdata i `DEFAULT_LINES` behöver kontrolleras mot verkligheten. Användaren rättar via
-  adminsidan (*Spår på sträckorna*); i användarens skärmbild var Degerfors–Laxå "okänt"
-  (passager mellan dem som inte gick att placera).
+- Spårdata enligt användaren: från Karlstad enkelspår fram till Laxå (Karlstad C–Skattkärr
+  behålls som dubbelspår), Laxå–Stockholm stambana med dubbelspår. Orsaken till att en bit
+  efter Degerfors visades som "okänt" i 2.1.0 är inte bekräftad (troligen ett stationsnamn som
+  inte matchade); 2.1.2 jämför namn tolerantare och fyller luckor mellan två banor via
+  knutpunkten (Laxå). Be användaren bekräfta att inget står som okänt efter uppgraderingen.
+- Inbyggda rader i `track_sections` skrivs om vid varje hämtning; rader med `source='admin'`
+  rörs inte.
 
 - **Säkerhetskontrollen har aldrig körts.** Den skulle ha gått 2026-11-17 04:17 UTC men det
   finns inga körningar. Kontrollera att standardgrenen är `main`, och starta den manuellt

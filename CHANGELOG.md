@@ -2,6 +2,11 @@
 
 Varje release får ett avsnitt `## [x.y.z] - ÅÅÅÅ-MM-DD`. Avsnittet blir releasetexten på GitHub.
 
+## [2.1.2] - 2026-11-17
+
+- Spåren på linjen blir rätt i fler fall. Sträckor som visades som *okänt* mellan Degerfors och Laxå får nu enkelspår, och sträckorna från Laxå mot Stockholm dubbelspår (stambanan). Stationsnamn jämförs nu mer tolerant.
+- Inbyggda spåruppgifter räknas om vid varje hämtning, så att rättelser i appen slår igenom även i befintliga databaser. Det du själv har ändrat på adminsidan behålls.
+
 ## [2.1.1] - 2026-11-17
 
 - Linjen visar nu ett tåg som har kommit fram stående vid slutstationen, i stället för där det befann sig vid planerad ankomsttid. Texten ovanför linjen säger när tåget kom fram och var det var när det skulle ha varit framme. *Spela upp resan* visar fortfarande hela resan.

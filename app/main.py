@@ -17,6 +17,7 @@ import sqlite3
 import statistics
 import threading
 import time
+import unicodedata
 import urllib.request
 from contextlib import asynccontextmanager, contextmanager
 from datetime import date, datetime, timedelta, timezone
@@ -130,10 +131,18 @@ DEFAULT_LINES = [
     ("Mälarbanan", [("Örebro C", 1), ("Arboga", 2), ("Köping", 2), ("Kolbäck", 2), ("Västerås C", 2),
                     ("Enköping", 2), ("Bålsta", 2), ("Kungsängen", 2), ("Sundbyberg", 2), ("Stockholm C", None)]),
 ]
+
+
+def station_key(name: str | None) -> str:
+    """Jämförbart stationsnamn: samma Unicode-form, gemener, utan "C"/"central"/"station" på slutet."""
+    key = " ".join(unicodedata.normalize("NFC", name or "").casefold().replace("-", " ").split())
+    return re.sub(r"\s+(c|central|centralstation|station|bangård)$", "", key)
+
+
 _LINE_INDEX: dict[str, list[tuple[str, int]]] = {}
 for _line, _stations in DEFAULT_LINES:
     for _i, (_name, _) in enumerate(_stations):
-        _LINE_INDEX.setdefault(_name.lower(), []).append((_line, _i))
+        _LINE_INDEX.setdefault(station_key(_name), []).append((_line, _i))
 _LINES = dict(DEFAULT_LINES)
 
 
@@ -310,27 +319,52 @@ def pair_key(a: str, b: str) -> tuple[str, str]:
     return (a, b) if a <= b else (b, a)
 
 
-def guess_section(names: list[str | None], i: int) -> tuple[int | None, str | None]:
+def _line_tracks(line: str, ia: int, ib: int) -> int | None:
+    lo, hi = sorted((ia, ib))
+    counts = [c for _, c in _LINES[line][lo:hi]]
+    return None if not counts or None in counts else min(counts)
+
+
+def guess_section(points: list[dict], i: int) -> tuple[int | None, str | None]:
     """Gissar antal spår mellan punkt i och i+1 ur DEFAULT_LINES.
 
     Punkter som inte finns i någon bana (t.ex. driftplatser utan resandeutbyte) får samma bana
-    som de närmaste kända stationerna före och efter.
+    som de närmaste kända stationerna före och efter. Ligger de kända stationerna på två olika
+    banor som möts i en knutpunkt (t.ex. Laxå) räknas sträckan till den första banan fram till
+    halva tiden mellan stationerna och till den andra därefter.
     """
     def known(k):
-        return _LINE_INDEX.get((names[k] or "").lower())
+        return _LINE_INDEX.get(station_key(points[k]["station"]))
+
+    def t(k):
+        iso = points[k]["planned_arr"] or points[k]["planned_dep"]
+        return datetime.fromisoformat(iso).timestamp() if iso else None
 
     a = next((k for k in range(i, -1, -1) if known(k)), None)
-    b = next((k for k in range(i + 1, len(names)) if known(k)), None)
+    b = next((k for k in range(i + 1, len(points)) if known(k)), None)
     if a is None or b is None:
         return None, None
     best = None
     for line, ia in known(a):
         for line_b, ib in known(b):
             if line == line_b and ia != ib and (best is None or abs(ia - ib) < best[0]):
-                lo, hi = sorted((ia, ib))
-                counts = [c for _, c in _LINES[line][lo:hi]]
-                best = (hi - lo, min(counts) if None not in counts else None, line)
-    return (best[1], best[2]) if best else (None, None)
+                best = (abs(ia - ib), _line_tracks(line, ia, ib), line)
+    if best:
+        return best[1], best[2]
+    # Olika banor: leta upp en gemensam knutpunkt.
+    for line_a, ia in known(a):
+        for line_b, ib in known(b):
+            for name, _ in _LINES[line_a]:
+                hits_b = [jb for lb, jb in _LINE_INDEX[station_key(name)] if lb == line_b]
+                if not hits_b or line_a == line_b:
+                    continue
+                ja = next(k for k, (n, _) in enumerate(_LINES[line_a]) if n == name)
+                ta, tb, ti, tj = t(a), t(b), t(i), t(i + 1)
+                first = None in (ta, tb, ti, tj) or (ti + tj) / 2 < (ta + tb) / 2
+                if first:
+                    return _line_tracks(line_a, ia, ja), line_a
+                return _line_tracks(line_b, hits_b[0], ib), line_b
+    return None, None
 
 
 def journey_points(ordered: list[sqlite3.Row], names: dict[str, str]) -> list[dict]:
@@ -372,7 +406,6 @@ def journey_segments(points: list[dict], tracks: dict[tuple[str, str], dict]) ->
 
     added = hur många minuter förseningen ökade på sträckan (negativt = tåget tog igen tid).
     """
-    names = [p["station"] for p in points]
     out: list[dict] = []
 
     def d_in(p):
@@ -392,10 +425,10 @@ def journey_segments(points: list[dict], tracks: dict[tuple[str, str], dict]) ->
             break
         q = points[i + 1]
         known = tracks.get(pair_key(p["sig"], q["sig"]))
-        if known:
+        if known and known["source"] == "admin":
             n_tracks, line, source = known["tracks"], known["line"], known["source"]
         else:
-            n_tracks, line = guess_section(names, i)
+            n_tracks, line = guess_section(points, i)
             source = "inbyggd"
         a, b = d_out(p), d_in(q)
         out.append({
@@ -507,7 +540,8 @@ def save_segments(idents: list[str], since: str | None) -> None:
                      for n, s in enumerate(j["segments"])],
                 )
                 conn.executemany(
-                    "INSERT OR IGNORE INTO track_sections VALUES (?,?,?,?,?)",
+                    """INSERT INTO track_sections VALUES (?,?,?,?,?) ON CONFLICT(from_sig, to_sig) DO UPDATE SET
+                         tracks=excluded.tracks, line=excluded.line WHERE track_sections.source = 'inbyggd'""",
                     [(*pair_key(s["from_sig"], s["to_sig"]), s["tracks"], s["line"], "inbyggd")
                      for s in j["segments"] if s["kind"] == "run" and s["track_source"] == "inbyggd"],
                 )
