@@ -3,7 +3,7 @@
 Överlämning mellan chattsessioner. Läs den här filen och `CLAUDE.md` först i en ny session,
 och uppdatera filen när något viktigt ändras (via PR, utan versionshöjning).
 
-*Senast uppdaterad: 2026-11-17, efter release v2.1.6, inför v2.2.0.*
+*Senast uppdaterad: 2026-11-17, efter release v2.2.0.*
 
 ## Vad Tågkoll är
 
@@ -112,7 +112,7 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
   kontrollerade; rättelsen finns i imagen. Användaren var (med rätta) irriterad: **testa alltid
   båda tågen/riktningarna** (t.ex. en spegelvänd kopia av 620 som 643 i en testdatabas) innan
   release.
-- **v2.2.0**: besökare i dag uppe till höger (`/api/visitors`, räknas bara vid sidladdning av
+- **v2.2.0** (2026-11-17), släppt och kontrollerad (`docker pull` utan inloggning): besökare i dag uppe till höger (`/api/visitors`, räknas bara vid sidladdning av
   `/`, inte admin/API/robotar) och avsnittet *Kakor och integritet* i sidfoten, inklusive
   Cloudflare (användarens val). Dashboarden ska fortsätta vara helt utan kakor.
 
@@ -143,6 +143,9 @@ Användarens slutliga besked (efter flera rundor 2.1.2–2.1.5):
 
 ## Öppna punkter
 
+- Besöksräknaren läser IP från `CF-Connecting-IP`/`X-Forwarded-For`. Om användarens Nginx
+  Proxy Manager inte skickar vidare dem blir alla besökare samma IP (bara webbläsaren skiljer)
+  och siffran blir för låg. Be användaren säga till om siffran ser konstig ut.
 - Användaren har inte bekräftat 2.1.6 med riktiga data. Fråga om linjen ser rätt ut för både
   620 och 643 (spår och Laxå-markering), och om inget står som "Okänt" under *Spår på sträckorna* på /admin.
 - Det är okänt varför en bit efter Degerfors visades som "okänt" i 2.1.0 (troligen ett
