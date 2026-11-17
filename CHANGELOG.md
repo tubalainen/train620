@@ -2,6 +2,15 @@
 
 Varje release får ett avsnitt `## [x.y.z] - ÅÅÅÅ-MM-DD`. Avsnittet blir releasetexten på GitHub.
 
+## [2.1.0] - 2026-11-17
+
+- **Ny linjevy** på dashboarden: ett ånglok med animerad ånga visar var tåget är på sträckan, och ett streckat spöktåg visar var det hade varit enligt tidtabellen, med förseningen i minuter mellan dem. För avgångar som redan gått visas läget vid planerad ankomsttid, och *Spela upp resan* kör hela resan från start till mål. Inställda avgångar och sträckor syns tydligt i rött.
+- Linjen visar **enkelspår och dubbelspår** och färgar de sträckor där förseningen uppstod (gult +2–4 min, orange +5 min eller mer). Antalet spår är inbyggda, ungefärliga uppgifter och kan rättas på adminsidan under *Spår på sträckorna*.
+- Ny utfällbar sektion **Var uppstod förseningen?** med varje delsträcka och uppehåll där tåget förlorade eller tog igen tid, antal spår och Trafikverkets orsak.
+- Välj vilken avgång som visas på linjen med *Visa på linjen* i avgångstabellen.
+- Var förseningarna uppstod och antalet spår per sträcka sparas i databasen. Befintliga databaser uppgraderas automatiskt vid start.
+- Varje tåg visar hur gammal den äldsta datapunkten är och sedan när egen insamling från Trafikverket pågår, både på dashboarden och på adminsidan.
+
 ## [2.0.2] - 2026-11-16
 
 - Rättar att dashboarden kunde fastna på "Hämtar …" bakom en cache som Cloudflare efter en uppgradering: skript och stilmall får nu versionsnumret i adressen, så att en ny release aldrig blandas med cachade filer från en äldre.

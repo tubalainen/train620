@@ -43,6 +43,14 @@ function showView(view) {
   if (view === "login") $("password").focus();
 }
 
+function fmtAge(days) {
+  if (days < 1) return "i dag";
+  if (days < 14) return `${days} d`;
+  if (days < 60) return `${Math.round(days / 7)} v`;
+  const months = Math.round(days / 30.44);
+  return months < 12 ? `${months} mån` : `${Math.floor(months / 12)} år ${months % 12} mån`;
+}
+
 const fmtDate = (iso) => new Date(iso + "T12:00:00").toLocaleDateString("sv-SE", { day: "numeric", month: "short", year: "numeric" });
 
 // ------------------------------------------------------------------- tåg
@@ -56,7 +64,8 @@ async function loadTrains() {
       el("td", {}, el("strong", { text: t.ident })),
       el("td", { class: "route", text: t.origin ? `${t.origin} → ${t.destination}` : "Inga uppgifter från Trafikverket ännu" }),
       el("td", { class: "num", text: nf(t.journeys) }),
-      el("td", { text: t.first_date ? fmtDate(t.first_date) : "–" }),
+      el("td", { text: t.first_date ? `${fmtDate(t.first_date)} (${fmtAge(t.age_days)})` : "–",
+                 title: t.first_collected_date ? `Egen insamling sedan ${fmtDate(t.first_collected_date)}` : "" }),
       el("td", { class: "actions" }, el("button", { type: "button", class: "remove-btn", text: "Ta bort", onclick: () => removeTrain(t.ident) }))));
   }
   const select = $("import-train");
@@ -89,6 +98,55 @@ $("add-form").addEventListener("submit", async (e) => {
   } catch (err) { showMessage(err.message); }
   button.disabled = false;
 });
+
+// ---------------------------------------------------------------- spår
+let tracks = [];
+const TRACK_OPTIONS = [["", "Okänt"], ["1", "Enkelspår"], ["2", "Dubbelspår"]];
+
+function renderTracks() {
+  const q = $("track-filter").value.trim().toLowerCase();
+  const rows = $("track-rows");
+  const shown = tracks.filter((t) => !q || `${t.from} ${t.to} ${t.line ?? ""}`.toLowerCase().includes(q));
+  rows.replaceChildren();
+  if (!shown.length) rows.append(el("tr", {}, el("td", { colspan: 5, text: tracks.length ? "Inga sträckor matchar." : "Inga sträckor ännu – de läggs till när tågen har gått." })));
+  for (const t of shown) {
+    const select = el("select", { class: "field", "aria-label": `Antal spår ${t.from}–${t.to}` },
+      ...TRACK_OPTIONS.map(([v, label]) => el("option", { value: v, text: label })));
+    select.value = t.tracks === null ? "" : String(t.tracks);
+    const line = el("input", { class: "field line-input", value: t.line ?? "", maxlength: 60, placeholder: "Bana", "aria-label": `Bana ${t.from}–${t.to}` });
+    const save = async () => {
+      try {
+        await api("/api/tracks", { method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ from_sig: t.from_sig, to_sig: t.to_sig, tracks: select.value ? Number(select.value) : null, line: line.value }) });
+        showMessage(`${t.from}–${t.to} sparades.`, true);
+        await loadTracks();
+      } catch (err) { showMessage(err.message); }
+    };
+    select.addEventListener("change", save);
+    line.addEventListener("change", save);
+    const reset = t.source === "admin"
+      ? el("button", { type: "button", text: "Återställ", title: "Använd den inbyggda uppgiften igen", onclick: async () => {
+          try {
+            await api(`/api/tracks/${encodeURIComponent(t.from_sig)}/${encodeURIComponent(t.to_sig)}`, { method: "DELETE" });
+            showMessage(`${t.from}–${t.to} återställdes.`, true);
+            await loadTracks();
+          } catch (err) { showMessage(err.message); }
+        } })
+      : null;
+    rows.append(el("tr", {},
+      el("td", { text: `${t.from} – ${t.to}` }),
+      el("td", {}, line),
+      el("td", {}, select),
+      el("td", { class: "route", text: t.source === "admin" ? "Ändrad här" : "Inbyggd" }),
+      el("td", { class: "actions" }, reset)));
+  }
+}
+
+async function loadTracks() {
+  tracks = await api("/api/tracks");
+  renderTracks();
+}
+$("track-filter").addEventListener("input", renderTracks);
 
 // ---------------------------------------------------------------- import
 const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
@@ -192,7 +250,7 @@ $("refresh").addEventListener("click", async (e) => {
 
 async function enterPanel() {
   showView("panel");
-  await Promise.all([loadTrains(), api("/api/health").then(renderPoll)]);
+  await Promise.all([loadTrains(), loadTracks(), api("/api/health").then(renderPoll)]);
 }
 
 (async function start() {

@@ -3,7 +3,7 @@
 Överlämning mellan chattsessioner. Läs den här filen och `CLAUDE.md` först i en ny session,
 och uppdatera filen när något viktigt ändras (via PR, utan versionshöjning).
 
-*Senast uppdaterad: 2026-11-17, efter release v2.0.2.*
+*Senast uppdaterad: 2026-11-17, inför release v2.1.0 (linjevy).*
 
 ## Vad Tågkoll är
 
@@ -11,7 +11,9 @@ Webbapp som samlar förseningar och inställda tåg från Trafikverkets öppna A
 statistiken i en dashboard. Tåg 620 (Karlstad C → Stockholm C) och 643 (Stockholm C →
 Karlstad C, SJ Snabbtåg) bevakas.
 
-- **Dashboard `/`:** punktlighet, försenade/inställda, medelförsening, försening per avgång,
+- **Dashboard `/`:** äldsta datapunkt per tåg, linjevy (ånglok + spöktåg enligt tidtabell,
+  enkel/dubbelspår, färgade förseningssträckor, uppspelning, utfällbar "Var uppstod
+  förseningen?"), punktlighet, försenade/inställda, medelförsening, försening per avgång,
   vecka, veckodag och station, samt tabell med alla avgångar (utfällbar per station).
 - **Admin `/admin`:** lösenordsskyddad (`ADMIN_PASSWORD`). Lägga till/ta bort tåg, *Uppdatera
   nu*, CSV-import av historik (filval, drag-och-släpp, inklistring) och *Radera allt och börja om*.
@@ -31,7 +33,14 @@ Karlstad C, SJ Snabbtåg) bevakas.
 | `.github/workflows/security.yml` | Trivy varje natt 04:17 UTC, öppnar ärende vid fynd |
 
 SQLite-tabeller: `trains`, `announcements` (alla hållplatslägen från Trafikverket),
-`imported_journeys` (CSV-import, används bara för dagar utan egna data), `stations`, `meta`.
+`imported_journeys` (CSV-import, används bara för dagar utan egna data), `stations`, `meta`,
+`delay_segments` (var förseningen uppstod per delsträcka/uppehåll, räknas om efter varje
+hämtning) och `track_sections` (antal spår per sträcka; `inbyggd` från `DEFAULT_LINES` eller
+`admin` när användaren rättat). Nya tabeller skapas automatiskt vid start.
+
+Spårdata i `DEFAULT_LINES` är ungefärlig och skrevs utan tillgång till riktiga hållplatslägen
+(ingen API-nyckel i molnsessionen). Kontrollera mot verkliga data när det går: driftplatser
+som inte finns i listan ärver bana från närmaste kända stationer.
 
 HTML-sidorna levereras av appen med `?v=<version>` på skript och stilmall, eftersom Cloudflare
 annars cachar gammal `app.js` efter en uppgradering (det var buggen som rättades i 2.0.2).

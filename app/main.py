@@ -87,7 +87,54 @@ CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT
 );
+CREATE TABLE IF NOT EXISTS track_sections (
+    from_sig TEXT NOT NULL,
+    to_sig TEXT NOT NULL,
+    tracks INTEGER,
+    line TEXT,
+    source TEXT NOT NULL,
+    PRIMARY KEY (from_sig, to_sig)
+);
+CREATE TABLE IF NOT EXISTS delay_segments (
+    train_ident TEXT NOT NULL,
+    departure_date TEXT NOT NULL,
+    seq INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    from_sig TEXT NOT NULL,
+    to_sig TEXT NOT NULL,
+    planned_from TEXT,
+    planned_to TEXT,
+    delay_from INTEGER,
+    delay_to INTEGER,
+    added INTEGER,
+    canceled INTEGER NOT NULL,
+    tracks INTEGER,
+    line TEXT,
+    deviations TEXT NOT NULL,
+    PRIMARY KEY (train_ident, departure_date, seq)
+);
 """
+
+# Ungefärlig spårstandard för banorna som Karlstad–Stockholm-tågen trafikerar. Varje bana är en
+# lista (station, antal spår till nästa station). Används bara för sträckor som inte finns i
+# tabellen track_sections; sträckorna sparas där och kan rättas på adminsidan.
+DEFAULT_LINES = [
+    ("Värmlandsbanan", [("Kil", 1), ("Karlstad C", 2), ("Skattkärr", 1), ("Väse", 1), ("Ölme", 1),
+                        ("Kristinehamn", 1), ("Degerfors", 1), ("Laxå", None)]),
+    ("Västra stambanan", [("Laxå", 2), ("Hasselfors", 2), ("Hallsberg", 2), ("Pålsboda", 2), ("Högsjö", 2),
+                          ("Vingåker", 2), ("Katrineholm C", 2), ("Flen", 2), ("Sparreholm", 2), ("Gnesta", 2),
+                          ("Mölnbo", 2), ("Järna", 2), ("Södertälje Syd", 2), ("Flemingsberg", 2),
+                          ("Huddinge", 2), ("Stuvsta", 2), ("Älvsjö", 2), ("Stockholm Södra", 2),
+                          ("Stockholm C", None)]),
+    ("Hallsberg–Örebro", [("Hallsberg", 2), ("Kumla", 2), ("Örebro Södra", 2), ("Örebro C", None)]),
+    ("Mälarbanan", [("Örebro C", 1), ("Arboga", 2), ("Köping", 2), ("Kolbäck", 2), ("Västerås C", 2),
+                    ("Enköping", 2), ("Bålsta", 2), ("Kungsängen", 2), ("Sundbyberg", 2), ("Stockholm C", None)]),
+]
+_LINE_INDEX: dict[str, list[tuple[str, int]]] = {}
+for _line, _stations in DEFAULT_LINES:
+    for _i, (_name, _) in enumerate(_stations):
+        _LINE_INDEX.setdefault(_name.lower(), []).append((_line, _i))
+_LINES = dict(DEFAULT_LINES)
 
 
 @contextmanager
@@ -230,6 +277,8 @@ def poll_once(days_back: int | None = 3) -> None:
             with db() as conn:
                 idents = [r["ident"] for r in conn.execute("SELECT ident FROM trains")]
             n = fetch_announcements(idents, days_back)
+            since = None if days_back is None else (datetime.now(TZ).date() - timedelta(days=days_back + 1)).isoformat()
+            save_segments(idents, since)
             set_meta("last_poll_ok", datetime.now(timezone.utc).isoformat())
             set_meta("last_error", "")
             log.info("Hämtade %d tåglägen för %d tåg", n, len(idents))
@@ -257,7 +306,111 @@ def classify(delay: int) -> str:
     return "delayed" if delay > DELAY_THRESHOLD else "ontime"
 
 
-def build_journey(day: str, rows: list[sqlite3.Row], names: dict[str, str], now: datetime) -> dict:
+def pair_key(a: str, b: str) -> tuple[str, str]:
+    return (a, b) if a <= b else (b, a)
+
+
+def guess_section(names: list[str | None], i: int) -> tuple[int | None, str | None]:
+    """Gissar antal spår mellan punkt i och i+1 ur DEFAULT_LINES.
+
+    Punkter som inte finns i någon bana (t.ex. driftplatser utan resandeutbyte) får samma bana
+    som de närmaste kända stationerna före och efter.
+    """
+    def known(k):
+        return _LINE_INDEX.get((names[k] or "").lower())
+
+    a = next((k for k in range(i, -1, -1) if known(k)), None)
+    b = next((k for k in range(i + 1, len(names)) if known(k)), None)
+    if a is None or b is None:
+        return None, None
+    best = None
+    for line, ia in known(a):
+        for line_b, ib in known(b):
+            if line == line_b and ia != ib and (best is None or abs(ia - ib) < best[0]):
+                lo, hi = sorted((ia, ib))
+                counts = [c for _, c in _LINES[line][lo:hi]]
+                best = (hi - lo, min(counts) if None not in counts else None, line)
+    return (best[1], best[2]) if best else (None, None)
+
+
+def journey_points(ordered: list[sqlite3.Row], names: dict[str, str]) -> list[dict]:
+    """En punkt per plats i tidsordning, med ankomst- och avgångsläge sammanslagna."""
+    points: list[dict] = []
+    for r in ordered:
+        if not points or points[-1]["sig"] != r["location"] or r["activity_type"] in points[-1]["_types"]:
+            points.append({"sig": r["location"], "station": names.get(r["location"], r["location"]),
+                           "advertised": False, "canceled": False, "_types": set(), "_dev": []})
+        p = points[-1]
+        p["_types"].add(r["activity_type"])
+        key = "arr" if r["activity_type"] == "Ankomst" else "dep"
+        p[f"planned_{key}"] = r["advertised_time"]
+        p[f"actual_{key}"] = r["actual_time"]
+        p[f"estimated_{key}"] = r["estimated_time"]
+        p[f"canceled_{key}"] = bool(r["canceled"])
+        p["advertised"] = p["advertised"] or bool(r["advertised"])
+        if r["track"]:
+            p["track"] = r["track"]
+        for d in json.loads(r["deviations"]):
+            if d not in p["_dev"]:
+                p["_dev"].append(d)
+    for p in points:
+        for key in ("arr", "dep"):
+            p.setdefault(f"planned_{key}", None)
+            p.setdefault(f"actual_{key}", None)
+            p.setdefault(f"estimated_{key}", None)
+            p.setdefault(f"canceled_{key}", False)
+            p[f"delay_{key}"] = (minutes_between(p[f"actual_{key}"], p[f"planned_{key}"])
+                                 if p[f"actual_{key}"] and p[f"planned_{key}"] else None)
+        p["canceled"] = all(p["canceled_arr" if t == "Ankomst" else "canceled_dep"] for t in p["_types"])
+        p["deviations"] = p.pop("_dev")
+        del p["_types"]
+    return points
+
+
+def journey_segments(points: list[dict], tracks: dict[tuple[str, str], dict]) -> list[dict]:
+    """Delsträckor mellan på varandra följande punkter och uppehåll med tillkommen försening.
+
+    added = hur många minuter förseningen ökade på sträckan (negativt = tåget tog igen tid).
+    """
+    names = [p["station"] for p in points]
+    out: list[dict] = []
+
+    def d_in(p):
+        return p["delay_arr"] if p["delay_arr"] is not None else p["delay_dep"]
+
+    def d_out(p):
+        return p["delay_dep"] if p["delay_dep"] is not None else p["delay_arr"]
+
+    for i, p in enumerate(points):
+        if p["delay_arr"] is not None and p["delay_dep"] is not None and p["delay_dep"] != p["delay_arr"]:
+            out.append({"kind": "stop", "from_sig": p["sig"], "to_sig": p["sig"], "from": p["station"],
+                        "to": p["station"], "planned_from": p["planned_arr"], "planned_to": p["planned_dep"],
+                        "delay_from": p["delay_arr"], "delay_to": p["delay_dep"],
+                        "added": p["delay_dep"] - p["delay_arr"], "canceled": False,
+                        "tracks": None, "line": None, "track_source": None, "deviations": p["deviations"]})
+        if i + 1 == len(points):
+            break
+        q = points[i + 1]
+        known = tracks.get(pair_key(p["sig"], q["sig"]))
+        if known:
+            n_tracks, line, source = known["tracks"], known["line"], known["source"]
+        else:
+            n_tracks, line = guess_section(names, i)
+            source = "inbyggd"
+        a, b = d_out(p), d_in(q)
+        out.append({
+            "kind": "run", "from_sig": p["sig"], "to_sig": q["sig"], "from": p["station"], "to": q["station"],
+            "planned_from": p["planned_dep"] or p["planned_arr"], "planned_to": q["planned_arr"] or q["planned_dep"],
+            "delay_from": a, "delay_to": b, "added": b - a if a is not None and b is not None else None,
+            "canceled": bool(p["canceled_dep"] or q["canceled_arr"] or (p["canceled"] and q["canceled"])),
+            "tracks": n_tracks, "line": line, "track_source": source,
+            "deviations": [d for d in q["deviations"] if d not in p["deviations"]] or q["deviations"],
+        })
+    return out
+
+
+def build_journey(day: str, rows: list[sqlite3.Row], names: dict[str, str], now: datetime,
+                  tracks: dict[tuple[str, str], dict] | None = None) -> dict:
     # Samma hållplatsläge kan i sällsynta fall finnas under två ActivityId – behåll det senast ändrade.
     unique: dict[tuple, sqlite3.Row] = {}
     for r in sorted(rows, key=lambda r: r["modified_time"] or ""):
@@ -298,6 +451,9 @@ def build_journey(day: str, rows: list[sqlite3.Row], names: dict[str, str], now:
     def name(sig):
         return names.get(sig, sig) if sig else None
 
+    points = journey_points(ordered, names)
+    segments = journey_segments(points, tracks or {})
+
     return {
         "date": day,
         "status": status,
@@ -326,7 +482,35 @@ def build_journey(day: str, rows: list[sqlite3.Row], names: dict[str, str], now:
             }
             for r in stops
         ],
+        "points": points,
+        "segments": segments,
     }
+
+
+def load_tracks(conn: sqlite3.Connection) -> dict[tuple[str, str], dict]:
+    return {pair_key(r["from_sig"], r["to_sig"]): dict(r) for r in conn.execute("SELECT * FROM track_sections")}
+
+
+def save_segments(idents: list[str], since: str | None) -> None:
+    """Sparar var förseningarna uppstod (delay_segments) och nya sträckor (track_sections)."""
+    for ident in idents:
+        journeys = [j for j in load_journeys(ident, since) if j["source"] == "trafikverket"]
+        with db() as conn:
+            for j in journeys:
+                conn.execute("DELETE FROM delay_segments WHERE train_ident = ? AND departure_date = ?",
+                             (ident, j["date"]))
+                conn.executemany(
+                    "INSERT INTO delay_segments VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    [(ident, j["date"], n, s["kind"], s["from_sig"], s["to_sig"], s["planned_from"], s["planned_to"],
+                      s["delay_from"], s["delay_to"], s["added"], int(s["canceled"]), s["tracks"], s["line"],
+                      json.dumps(s["deviations"], ensure_ascii=False))
+                     for n, s in enumerate(j["segments"])],
+                )
+                conn.executemany(
+                    "INSERT OR IGNORE INTO track_sections VALUES (?,?,?,?,?)",
+                    [(*pair_key(s["from_sig"], s["to_sig"]), s["tracks"], s["line"], "inbyggd")
+                     for s in j["segments"] if s["kind"] == "run" and s["track_source"] == "inbyggd"],
+                )
 
 
 def load_journeys(ident: str, since: str | None) -> list[dict]:
@@ -337,10 +521,11 @@ def load_journeys(ident: str, since: str | None) -> list[dict]:
         cond = " AND departure_date >= ?" if since else ""
         rows = conn.execute(f"SELECT * FROM announcements WHERE train_ident = ?{cond}", args).fetchall()
         imported = conn.execute(f"SELECT * FROM imported_journeys WHERE train_ident = ?{cond}", args).fetchall()
+        tracks = load_tracks(conn)
     by_day: dict[str, list] = {}
     for r in rows:
         by_day.setdefault(r["departure_date"], []).append(r)
-    journeys = {day: build_journey(day, rs, names, now) for day, rs in by_day.items()}
+    journeys = {day: build_journey(day, rs, names, now, tracks) for day, rs in by_day.items()}
     for r in imported:  # importerad historik fyller bara dagar som saknar egna data
         if r["departure_date"] not in journeys:
             journeys[r["departure_date"]] = {
@@ -348,7 +533,7 @@ def load_journeys(ident: str, since: str | None) -> list[dict]:
                 "current_delay": None, "estimated_arrival": None, "origin": None, "destination": None,
                 "planned_departure": None, "planned_arrival": None, "actual_arrival": None,
                 "operator": None, "product": None, "deviations": [], "source": r["source"] or "import",
-                "stops": [],
+                "stops": [], "points": [], "segments": [],
             }
     return sorted(journeys.values(), key=lambda j: j["date"], reverse=True)
 
@@ -439,6 +624,7 @@ def weekly_stats(journeys: list[dict]) -> list[dict]:
 def train_overview(ident: str) -> dict:
     journeys = load_journeys(ident, None)
     described = next((j for j in journeys if j["origin"]), None)
+    first = journeys[-1]["date"] if journeys else None
     return {
         "ident": ident,
         "origin": described["origin"] if described else None,
@@ -446,7 +632,10 @@ def train_overview(ident: str) -> dict:
         "operator": described["operator"] if described else None,
         "product": described["product"] if described else None,
         "journeys": sum(j["status"] in FINISHED for j in journeys),
-        "first_date": journeys[-1]["date"] if journeys else None,
+        "first_date": first,
+        "first_collected_date": min((j["date"] for j in journeys if j["source"] == "trafikverket"), default=None),
+        "first_imported_date": min((j["date"] for j in journeys if j["source"] != "trafikverket"), default=None),
+        "age_days": (datetime.now(TZ).date() - date.fromisoformat(first)).days if first else None,
     }
 
 
@@ -512,6 +701,13 @@ class ImportIn(BaseModel):
     source: str = "import"
 
 
+class TrackIn(BaseModel):
+    from_sig: str
+    to_sig: str
+    tracks: int | None = None
+    line: str | None = None
+
+
 def require_train(ident: str) -> None:
     with db() as conn:
         if not conn.execute("SELECT 1 FROM trains WHERE ident = ?", (ident,)).fetchone():
@@ -545,6 +741,7 @@ def add_train(body: TrainIn):
     try:
         with poll_lock:
             found = fetch_announcements([ident], None)
+            save_segments([ident], None)
     except Exception:
         log.exception("Första hämtningen för tåg %s misslyckades", ident)
     return {**train_overview(ident), "found": found}
@@ -557,6 +754,7 @@ def delete_train(ident: str):
         conn.execute("DELETE FROM trains WHERE ident = ?", (ident,))
         conn.execute("DELETE FROM announcements WHERE train_ident = ?", (ident,))
         conn.execute("DELETE FROM imported_journeys WHERE train_ident = ?", (ident,))
+        conn.execute("DELETE FROM delay_segments WHERE train_ident = ?", (ident,))
 
 
 @app.post("/api/refresh", dependencies=admin_only)
@@ -624,6 +822,54 @@ def import_history(ident: str, body: ImportIn):
     return {"imported": len(records), "skipped_lines": errors}
 
 
+def recompute_all_segments() -> None:
+    with db() as conn:
+        idents = [r["ident"] for r in conn.execute("SELECT ident FROM trains")]
+    save_segments(idents, None)
+
+
+@app.get("/api/tracks")
+def list_tracks():
+    """Sträckor som tågen har passerat, med antal spår (1, 2 eller null = okänt)."""
+    with db() as conn:
+        names = {r["signature"]: r["name"] for r in conn.execute("SELECT * FROM stations")}
+        used = {pair_key(r["from_sig"], r["to_sig"]): r["n"] for r in conn.execute(
+            "SELECT from_sig, to_sig, COUNT(*) AS n FROM delay_segments WHERE kind = 'run' GROUP BY from_sig, to_sig")}
+        rows = [dict(r) for r in conn.execute("SELECT * FROM track_sections")]
+    for r in rows:
+        r["from"] = names.get(r["from_sig"], r["from_sig"])
+        r["to"] = names.get(r["to_sig"], r["to_sig"])
+        r["journeys"] = used.get((r["from_sig"], r["to_sig"]), 0)
+    rows.sort(key=lambda r: (r["line"] or "~", r["from"], r["to"]))
+    return rows
+
+
+@app.put("/api/tracks", dependencies=admin_only)
+def set_track(body: TrackIn):
+    if body.tracks not in (None, 1, 2):
+        raise HTTPException(422, "Antal spår ska vara 1, 2 eller tomt (okänt).")
+    a, b = pair_key(body.from_sig.strip(), body.to_sig.strip())
+    if not a or not b:
+        raise HTTPException(422, "Ange båda driftplatserna.")
+    line = (body.line or "").strip()[:60] or None
+    with poll_lock:
+        with db() as conn:
+            conn.execute(
+                """INSERT INTO track_sections VALUES (?,?,?,?,'admin') ON CONFLICT(from_sig, to_sig) DO UPDATE SET
+                     tracks=excluded.tracks, line=excluded.line, source='admin'""", (a, b, body.tracks, line))
+        recompute_all_segments()
+    return {"from_sig": a, "to_sig": b, "tracks": body.tracks, "line": line, "source": "admin"}
+
+
+@app.delete("/api/tracks/{from_sig}/{to_sig}", status_code=204, dependencies=admin_only)
+def reset_track(from_sig: str, to_sig: str):
+    """Återställer en sträcka till den inbyggda uppgiften."""
+    with poll_lock:
+        with db() as conn:
+            conn.execute("DELETE FROM track_sections WHERE from_sig = ? AND to_sig = ?", pair_key(from_sig, to_sig))
+        recompute_all_segments()
+
+
 @app.get("/api/admin/session")
 def admin_session(request: Request):
     return {"enabled": bool(ADMIN_PASSWORD), "logged_in": session_valid(request.cookies.get(SESSION_COOKIE)),
@@ -656,7 +902,7 @@ def admin_reset(body: ResetIn):
         raise HTTPException(422, "Skriv RADERA för att bekräfta.")
     with poll_lock:
         with db() as conn:
-            for table in ("announcements", "imported_journeys", "trains", "meta"):
+            for table in ("announcements", "imported_journeys", "delay_segments", "trains", "meta"):
                 conn.execute(f"DELETE FROM {table}")
         init_db()
     log.warning("All data raderad via admin, börjar om med tåg %s", ", ".join(INITIAL_TRAINS))

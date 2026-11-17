@@ -20,6 +20,7 @@ const state = {
   train: localStorage.getItem("train"),
   days: localStorage.getItem("days") ?? "30",
   data: null,
+  lineDate: null,
 };
 
 // ------------------------------------------------------------------ helpers
@@ -215,7 +216,8 @@ function renderTrains() {
   for (const t of state.trains) {
     const active = t.ident === state.train;
     box.append(el("span", { class: "chip" + (active ? " active" : "") },
-      el("button", { type: "button", role: "tab", "aria-selected": active, text: t.ident, title: t.origin ? `${t.origin} → ${t.destination}` : "", onclick: () => selectTrain(t.ident) })));
+      el("button", { type: "button", role: "tab", "aria-selected": active, text: t.ident,
+        title: [t.origin ? `${t.origin} → ${t.destination}` : null, ageText(t)].filter(Boolean).join("\n"), onclick: () => selectTrain(t.ident) })));
   }
   for (const b of $("periods").children) b.setAttribute("aria-pressed", String(b.dataset.days === state.days));
 }
@@ -363,7 +365,10 @@ function stopsRow(j) {
   const table = el("table", {},
     el("thead", {}, el("tr", {}, ...["Station", "", "Planerad", "Verklig", "Avvikelse", ""].map((h, i) => el("th", { class: i >= 2 && i <= 4 ? "num" : "", text: h })))),
     body);
-  return el("tr", { class: "stops" }, el("td", { colspan: 6 }, table));
+  const show = j.points.length > 1
+    ? el("button", { type: "button", class: "show-line", text: "Visa på linjen ↑", onclick: (e) => { e.stopPropagation(); showOnLine(j.date); } })
+    : null;
+  return el("tr", { class: "stops" }, el("td", { colspan: 6 }, show, table));
 }
 
 const PAGE = 30;
@@ -395,6 +400,381 @@ function renderTable(journeys, limit = PAGE) {
   }
 }
 
+// ------------------------------------------------------------- datans ålder
+function fmtAge(days) {
+  if (days === null || days === undefined) return "";
+  if (days < 1) return "i dag";
+  if (days === 1) return "i går";
+  if (days < 14) return `för ${days} dagar sedan`;
+  if (days < 60) return `för ${Math.round(days / 7)} veckor sedan`;
+  const months = Math.round(days / 30.44);
+  if (months < 12) return `för ${months} månader sedan`;
+  const years = Math.floor(months / 12), rest = months % 12;
+  return `för ${years} år${rest ? ` och ${rest} mån` : ""} sedan`;
+}
+const longDate = (iso) => fmtDate(iso, { day: "numeric", month: "long", year: "numeric" });
+
+function ageText(t) {
+  if (!t.first_date) return "Inga datapunkter ännu.";
+  let text = `Äldsta datapunkt ${longDate(t.first_date)} (${fmtAge(t.age_days)}).`;
+  if (t.first_imported_date && t.first_collected_date) {
+    text += ` Egen insamling från Trafikverket sedan ${longDate(t.first_collected_date)}, äldre dagar är importerad historik.`;
+  } else if (t.first_imported_date) {
+    text += " Bara importerad historik, ingen egen insamling ännu.";
+  }
+  return text;
+}
+
+// ------------------------------------------------------------------- linjen
+const ms = (iso) => (iso ? Date.parse(iso) : null);
+const TRACKS = { 1: "Enkelspår", 2: "Dubbelspår" };
+const trackLabel = (n) => (n === "mixed" ? "Enkel- och dubbelspår" : TRACKS[n] ?? "Okänt antal spår");
+
+function segmentColor(s) {
+  if (s.canceled) return "var(--critical)";
+  if (s.added === null) return "var(--neutral)";
+  if (s.added >= 5) return "var(--serious)";
+  if (s.added >= 2) return "var(--warning)";
+  return "var(--rail)";
+}
+
+/** Tidpunkter då tåget passerar varje punkt. planned = enligt tidtabell, annars verkligt/beräknat. */
+function timeline(points, planned) {
+  const seq = [];
+  let lastDelay = 0, last = -Infinity, stoppedAt = null;
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    if (!planned && p.canceled) { stoppedAt = Math.max(0, i - 1); break; }
+    for (const key of ["arr", "dep"]) {
+      const plan = ms(p[`planned_${key}`]);
+      if (plan === null) continue;
+      let t = plan;
+      if (!planned) {
+        if (p[`canceled_${key}`]) continue;
+        const actual = ms(p[`actual_${key}`]);
+        if (actual !== null) { t = actual; lastDelay = p[`delay_${key}`]; }
+        else t = ms(p[`estimated_${key}`]) ?? plan + lastDelay * 60000;
+      }
+      t = Math.max(t, last);
+      last = t;
+      seq.push({ t, i, delay: Math.round((t - plan) / 60000), known: planned || p[`actual_${key}`] !== null });
+    }
+  }
+  if (!planned && !seq.length) stoppedAt = 0;
+  return { seq, stoppedAt };
+}
+
+/** Läge (x) och försening vid tiden t. */
+function positionAt(tl, t, xOf) {
+  const { seq } = tl;
+  if (!seq.length) return { x: xOf(0), delay: 0, index: 0 };
+  if (t <= seq[0].t) return { x: xOf(seq[0].i), delay: seq[0].delay, index: seq[0].i };
+  for (let k = 1; k < seq.length; k++) {
+    const a = seq[k - 1], b = seq[k];
+    if (t < b.t) {
+      const f = (t - a.t) / (b.t - a.t || 1);
+      return { x: xOf(a.i) + (xOf(b.i) - xOf(a.i)) * f, delay: a.delay, index: f < 0.5 ? a.i : b.i };
+    }
+  }
+  const z = seq[seq.length - 1];
+  return { x: xOf(z.i), delay: z.delay, index: z.i };
+}
+
+/** Ett ånglok i SVG med fronten i (0,0) på rälsen och färdriktning åt höger. */
+function locomotive(parent, cls) {
+  const g = svg("g", { class: `loco ${cls}` }, parent);
+  const steam = svg("g", { class: "steam" }, g);
+  for (let i = 0; i < 4; i++) svg("circle", { class: "puff", cx: -10, cy: -33, r: 4 }, steam);
+  const body = svg("g", { class: "body" }, g);
+  svg("rect", { x: -48, y: -31, width: 17, height: 3, rx: 1 }, body);               // tak
+  svg("rect", { x: -46, y: -29, width: 13, height: 21, rx: 1.5 }, body);            // hytt
+  svg("rect", { class: "window", x: -43, y: -25, width: 7, height: 6, rx: 1 }, body);
+  svg("rect", { x: -34, y: -21, width: 28, height: 13, rx: 4 }, body);              // panna
+  svg("rect", { x: -14, y: -29, width: 6, height: 9 }, body);                       // skorsten
+  svg("rect", { x: -16, y: -32, width: 10, height: 3, rx: 1 }, body);
+  svg("path", { d: "M-25,-21 a3.5,3.5 0 0 1 7,0 Z" }, body);                        // dom
+  svg("rect", { x: -47, y: -10, width: 43, height: 3 }, body);                      // ram
+  svg("path", { d: "M-6,-9 L0,-1 L-6,-1 Z" }, body);                                // plog
+  svg("circle", { class: "lamp", cx: -6, cy: -17, r: 2 }, g);
+  for (const [cx, r] of [[-39, 5.5], [-25, 4], [-14, 4]]) svg("circle", { class: "wheel", cx, cy: -r - 0.5, r }, g);
+  return g;
+}
+
+let linePlay = null;
+function stopPlay() {
+  if (linePlay) cancelAnimationFrame(linePlay.raf);
+  linePlay = null;
+  $("line-play").textContent = "▶ Spela upp resan";
+}
+
+function lineJourney(journeys) {
+  const withPoints = journeys.filter((j) => j.points.length > 1);
+  return withPoints.find((j) => j.date === state.lineDate) ?? withPoints[0] ?? null;
+}
+
+function renderLine() {
+  const card = $("line-card");
+  const j = state.data ? lineJourney(state.data.journeys) : null;
+  card.hidden = !j;
+  if (!j || linePlay) return;
+  const box = $("line");
+  box.replaceChildren();
+  const points = j.points;
+  const width = Math.max(300, box.clientWidth);
+  const narrow = width < 560;
+  const height = narrow ? 158 : 178;
+  const scale = narrow ? 0.95 : 1.25;
+  const m = { l: Math.round(48 * scale) + 6, r: narrow ? 14 : 22 };
+  const railY = narrow ? 92 : 108;
+  const root = svg("svg", { viewBox: `0 0 ${width} ${height}`, height, role: "img", class: "line-svg" }, box);
+  const tp = (p) => ms(p.planned_arr ?? p.planned_dep);
+  const t0 = tp(points[0]), span = (tp(points[points.length - 1]) - t0) || 1;
+  const xOf = (i) => m.l + ((tp(points[i]) - t0) / span) * (width - m.l - m.r);
+  const idx = new Map(points.map((p, i) => [p, i]));
+
+  // Spåret: sliprar, räls per delsträcka och osynliga träffytor för tooltip.
+  svg("line", { x1: xOf(0), x2: xOf(points.length - 1), y1: railY, y2: railY, class: "sleepers" }, root);
+  const runs = j.segments.filter((s) => s.kind === "run");
+  runs.forEach((s, k) => {
+    const x1 = xOf(k), x2 = xOf(k + 1);
+    const color = segmentColor(s);
+    const g = svg("g", { class: "seg" }, root);
+    const offsets = s.tracks === 2 ? [-3.5, 3.5] : [0];
+    for (const dy of offsets) {
+      svg("line", { x1, x2, y1: railY + dy, y2: railY + dy, stroke: color, "stroke-width": s.tracks === 2 ? 2.5 : 3.5,
+        "stroke-dasharray": s.tracks ? null : "5 4", "stroke-linecap": "butt" }, g);
+    }
+    if (s.canceled) svg("line", { x1, x2, y1: railY, y2: railY, class: "strike" }, g);
+    svg("rect", { class: "hit", x: x1, y: railY - 16, width: Math.max(2, x2 - x1), height: 32 }, g);
+    const tipData = {
+      color, label: `${s.from} → ${s.to}`,
+      value: s.canceled ? "Inställd sträcka" : s.added === null ? "Ej körd ännu" : `${s.added > 0 ? "+" : ""}${s.added} min på sträckan`,
+      extra: [trackLabel(s.tracks), s.line, ...s.deviations].filter(Boolean).join(" · "),
+    };
+    g.addEventListener("pointermove", (e) => { g.classList.add("hover"); showTip(e, tipData); });
+    g.addEventListener("pointerleave", () => { g.classList.remove("hover"); hideTip(); });
+  });
+
+  // Stationer: prickar, uppehåll med tillkommen försening får färgad ring, namn glesas ut.
+  const stopAdded = new Map(j.segments.filter((s) => s.kind === "stop").map((s) => [s.from_sig, s]));
+  const labelY = [railY + 26, railY + 42];
+  const placed = [[], []];
+  const fits = (row, a, b) => placed[row].every(([c, d]) => b + 8 < c || a > d + 8);
+  const labelBox = (i, name) => {
+    const x = xOf(i), w = name.length * 6.4;
+    const anchor = i === 0 ? "start" : i === points.length - 1 ? "end" : "middle";
+    const left = anchor === "start" ? x - 6 : anchor === "end" ? x - w + 6 : x - w / 2;
+    return { anchor, left, right: left + w, tx: anchor === "start" ? x - 6 : anchor === "end" ? x + 6 : x };
+  };
+  // Start- och slutstation får alltid namn, övriga stationer där det finns plats.
+  const labelRow = new Map();
+  for (const i of [0, points.length - 1]) {
+    const b = labelBox(i, points[i].station);
+    const row = fits(0, b.left, b.right) ? 0 : 1;
+    placed[row].push([b.left, b.right]);
+    labelRow.set(i, row);
+  }
+  points.forEach((p, i) => {
+    if (labelRow.has(i) || !p.advertised) return;
+    const b = labelBox(i, p.station);
+    const row = [0, 1].find((r) => fits(r, b.left, b.right));
+    if (row !== undefined) { placed[row].push([b.left, b.right]); labelRow.set(i, row); }
+  });
+  points.forEach((p, i) => {
+    if (!p.advertised && i !== 0 && i !== points.length - 1) return;
+    const x = xOf(i), end = i === 0 || i === points.length - 1;
+    const dwell = stopAdded.get(p.sig);
+    const g = svg("g", { class: "station" }, root);
+    svg("circle", { cx: x, cy: railY, r: end ? 7 : 5.5, class: "dot" + (p.canceled ? " canceled" : ""),
+      stroke: dwell && dwell.added >= 2 ? segmentColor(dwell) : null }, g);
+    if (labelRow.has(i)) {
+      const b = labelBox(i, p.station);
+      const t = svg("text", { x: b.tx, y: labelY[labelRow.get(i)], "text-anchor": b.anchor, class: end ? "end-label" : "" }, g);
+      t.textContent = p.station;
+    }
+    svg("rect", { class: "hit", x: x - 9, y: railY - 12, width: 18, height: 24 }, g);
+    const plan = p.planned_dep ?? p.planned_arr, actual = p.actual_dep ?? p.actual_arr;
+    const delay = p.delay_dep ?? p.delay_arr;
+    const tipData = { color: "var(--ink-2)", label: p.station,
+      value: p.canceled ? "Inställt" : actual ? `${hhmm(actual)} (${fmtDelay(delay)})` : `Planerat ${hhmm(plan)}`,
+      extra: [`Tidtabell ${hhmm(plan)}`, dwell ? `uppehållet ${dwell.added > 0 ? "+" : ""}${dwell.added} min` : null,
+              p.track ? `spår ${p.track}` : null, ...p.deviations].filter(Boolean).join(" · ") };
+    g.addEventListener("pointermove", (e) => showTip(e, tipData));
+    g.addEventListener("pointerleave", hideTip);
+  });
+
+  // Loken: spöktåget efter tidtabell och ångloket efter verkliga tider.
+  const real = timeline(points, false), plan = timeline(points, true);
+  const ghost = locomotive(root, "ghost");
+  const loco = locomotive(root, "real");
+  const gap = svg("g", { class: "gap" }, root);
+  const gapLine = svg("path", {}, gap);
+  const gapText = svg("text", { "text-anchor": "middle" }, gap);
+  const ghostTag = svg("text", { class: "ghost-tag", "text-anchor": "end" }, root);
+  ghostTag.textContent = "Enligt tidtabell";
+  const sign = svg("g", { class: "cancel-sign" }, root);
+  const signRect = svg("rect", { rx: 4, height: 20 }, sign);
+  const signText = svg("text", { "text-anchor": "middle" }, sign);
+  const tagY = railY - 56 * scale;
+
+  const fullyCanceled = j.status === "cancelled";
+  const arrival = ms(points[points.length - 1].planned_arr ?? points[points.length - 1].planned_dep);
+  const lastReal = real.seq.length ? real.seq[real.seq.length - 1].t : arrival;
+  const defaultT = j.status === "pending" ? Date.now() : arrival;
+  const startT = ms(points[0].planned_dep ?? points[0].planned_arr);
+  const endT = j.status === "pending" ? Math.max(Date.now(), startT) : Math.max(arrival, lastReal);
+
+  function update(t, playing) {
+    const r = fullyCanceled ? { x: xOf(0), delay: 0, index: 0 } : positionAt(real, t, xOf);
+    const g = positionAt(plan, t, xOf);
+    const stopped = real.stoppedAt !== null && (!real.seq.length || t >= real.seq[real.seq.length - 1].t);
+    loco.setAttribute("transform", `translate(${r.x},${railY - 4}) scale(${scale})`);
+    ghost.setAttribute("transform", `translate(${g.x},${railY - 4}) scale(${scale})`);
+    loco.classList.toggle("stopped", stopped || fullyCanceled);
+    const moving = !stopped && t > (real.seq[0]?.t ?? Infinity) && t < lastReal;
+    loco.classList.toggle("moving", moving);
+    const apart = g.x - r.x > 24 * scale;
+    ghostTag.setAttribute("x", g.x - 24 * scale);
+    ghostTag.setAttribute("text-anchor", "middle");
+    ghostTag.setAttribute("y", railY - 41 * scale);
+    ghostTag.style.display = apart ? "" : "none";
+    const minutes = stopped || fullyCanceled ? null : r.delay;
+    gap.style.display = apart && minutes > 0 ? "" : "none";
+    if (apart && minutes > 0) {
+      const x1 = r.x, x2 = g.x;
+      gapLine.setAttribute("d", `M${x1},${tagY + 5} V${tagY} H${x2} V${tagY + 5}`);
+      gapText.setAttribute("x", Math.min(width - 30, Math.max(x1 + 24, (x1 + x2) / 2)));
+      gapText.setAttribute("y", tagY - 5);
+      gapText.textContent = `+${minutes} min`;
+    }
+    sign.style.display = stopped || fullyCanceled ? "" : "none";
+    if (stopped || fullyCanceled) {
+      signText.textContent = fullyCanceled ? "INSTÄLLT" : `INSTÄLLT EFTER ${points[real.stoppedAt].station.toUpperCase()}`;
+      const w = signText.textContent.length * 7 + 16;
+      const sx = Math.min(Math.max(r.x - 24 * scale, m.l - 30 + w / 2), width - w / 2 - 2);
+      signRect.setAttribute("x", sx - w / 2);
+      signRect.setAttribute("width", w);
+      signRect.setAttribute("y", tagY - 18);
+      signText.setAttribute("x", sx);
+      signText.setAttribute("y", tagY - 4);
+    }
+    $("line-clock").textContent = `kl ${new Date(t).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Stockholm" })}` +
+      (playing ? "" : j.status === "pending" ? " (nu)" : " (planerad ankomst)");
+    return r;
+  }
+
+  const r = update(defaultT, false);
+  $("line-title").textContent = `Linjen · ${fmtLongDate(j.date)}`;
+  $("line-sub").textContent = lineStatusText(j, points, r, real);
+  $("line-play").onclick = () => {
+    if (linePlay) { stopPlay(); update(defaultT, false); return; }
+    const duration = 8000, began = performance.now();
+    $("line-play").textContent = "■ Stoppa";
+    const step = (now) => {
+      const f = Math.min(1, (now - began) / duration);
+      update(startT + (endT - startT) * f, true);
+      if (f < 1) linePlay.raf = requestAnimationFrame(step);
+      else { stopPlay(); setTimeout(() => { if (!linePlay) update(defaultT, false); }, 1500); }
+    };
+    linePlay = { raf: requestAnimationFrame(step) };
+  };
+
+  const legend = [
+    ["var(--rail)", "Ingen ny försening"], ["var(--warning)", "+2–4 min"], ["var(--serious)", "+5 min eller mer"],
+    ["var(--critical)", "Inställd sträcka"], ["var(--neutral)", "Ej körd ännu"],
+  ].filter(([c]) => c !== "var(--neutral)" || j.status === "pending");
+  $("line-legend").replaceChildren(
+    ...legend.map(([c, t]) => el("span", {}, el("span", { class: "swatch", style: `background:${c}` }), document.createTextNode(t))),
+    el("span", {}, el("span", { class: "rail-key double" }), document.createTextNode("Dubbelspår")),
+    el("span", {}, el("span", { class: "rail-key single" }), document.createTextNode("Enkelspår")),
+    el("span", {}, el("span", { class: "rail-key unknown" }), document.createTextNode("Okänt")),
+    el("span", {}, el("span", { class: "ghost-key" }), document.createTextNode("Enligt tidtabell")));
+  renderDelayDetails(j);
+}
+
+function nearestStation(points, index) {
+  for (let i = index; i >= 0; i--) if (points[i].advertised) return points[i].station;
+  return points[index].station;
+}
+
+function lineStatusText(j, points, r, real) {
+  const pos = nearestStation(points, r.index);
+  const where = r.index === points.length - 1 ? `framme i ${points[r.index].station}` : `vid ${pos}`;
+  if (j.status === "cancelled") return `Avgången ställdes in. Loket står kvar i ${points[0].station}.`;
+  if (j.status === "pending") {
+    if (j.current_delay === null) return `Planerad avgång ${hhmm(j.planned_departure)} från ${points[0].station}.`;
+    return `På väg, senast ${where}. ${j.current_delay > 0 ? `${j.current_delay} min efter tidtabell.` : "Enligt tidtabell."}`;
+  }
+  if (real.stoppedAt !== null) return `Tåget kom inte längre än ${points[real.stoppedAt].station}, resten av sträckan ställdes in.`;
+  if (j.delay !== null && j.delay > 0) {
+    return `När tåget skulle ha varit framme (${hhmm(j.planned_arrival)}) var det ${where}. Ankom ${hhmm(j.actual_arrival)}, ${j.delay} min sent.`;
+  }
+  return `Tåget kom fram ${hhmm(j.actual_arrival)}, ${j.delay < 0 ? `${-j.delay} min före tidtabell` : "enligt tidtabell"}.`;
+}
+
+function renderDelayDetails(j) {
+  const body = $("delay-body");
+  const segs = j.segments;
+  const name = (s) => (s.kind === "stop" ? `Uppehåll i ${s.from}` : `${s.from} → ${s.to}`);
+  const worst = segs.filter((s) => s.added >= 2).sort((a, b) => b.added - a.added);
+  const canceled = segs.find((s) => s.canceled);
+  let summary;
+  if (j.status === "cancelled") summary = "Hela avgången ställdes in.";
+  else if (canceled) summary = `Inställd från ${canceled.from}.` + (worst[0] ? ` Mest tid förlorades ${name(worst[0])} (+${worst[0].added} min).` : "");
+  else if (worst.length) {
+    const s = worst[0];
+    summary = `+${s.added} min ${s.kind === "stop" ? `vid uppehållet i ${s.from}` : `mellan ${s.from} och ${s.to}`}` +
+      (s.kind === "run" ? `, ${trackLabel(s.tracks).toLowerCase()}` : "") + (worst.length > 1 ? ` och ${worst.length - 1} ${worst.length === 2 ? "ställe" : "ställen"} till` : "");
+  } else summary = segs.some((s) => s.added !== null) ? "Ingen försening uppstod längs vägen." : "Inga rapporterade tider ännu.";
+  $("delay-summary").textContent = summary;
+
+  const showAll = body.dataset.all === "1";
+  const merged = [];
+  for (const s of segs) {
+    const prev = merged[merged.length - 1];
+    if (prev && prev.canceled && s.canceled && s.kind === "run" && prev.kind === "run") {
+      merged[merged.length - 1] = { ...prev, to: s.to, tracks: prev.tracks === s.tracks ? s.tracks : "mixed",
+        line: prev.line === s.line ? s.line : null, deviations: [...new Set([...prev.deviations, ...s.deviations])] };
+    } else merged.push(s);
+  }
+  const shown = merged.filter((s) => showAll || s.canceled || (s.added !== null && Math.abs(s.added) >= 1) || (s.deviations.length && s.added !== 0));
+  const hiddenCount = merged.length - shown.length;
+  const rows = shown.map((s) => el("tr", { class: s.canceled ? "canceled" : "" },
+    el("td", {}, el("span", { class: "swatch", style: `background:${segmentColor(s)}` }), document.createTextNode(name(s))),
+    el("td", {}, document.createTextNode(s.kind === "stop" ? "–" : trackLabel(s.tracks)),
+      s.kind === "run" && s.line ? el("span", { class: "line-name", text: ` (${s.line})` }) : null),
+    el("td", { class: "num", text: s.canceled ? "–" : `${fmtDelay(s.delay_from)} → ${fmtDelay(s.delay_to)}` }),
+    el("td", { class: "num strong", text: s.canceled ? "Inställd" : s.added === null ? "–" : `${s.added > 0 ? "+" : s.added < 0 ? "−" : ""}${Math.abs(s.added)} min` }),
+    el("td", { class: "dev", text: s.deviations.join(", ") })));
+  const parts = [];
+  if (rows.length) {
+    parts.push(el("div", { class: "table-wrap" }, el("table", { class: "delay-table" },
+      el("thead", {}, el("tr", {}, ...["Sträcka", "Spår", "Försening före → efter", "Tillkommet", "Orsak enligt Trafikverket"]
+        .map((h, i) => el("th", { class: i === 2 || i === 3 ? "num" : "", text: h })))),
+      el("tbody", {}, ...rows))));
+  } else {
+    parts.push(el("p", { class: "sub", text: "Inga delsträckor med ändrad försening." }));
+  }
+  const note = el("p", { class: "sub details-note" });
+  note.append(document.createTextNode(
+    `Tillkommet = hur mycket förseningen ökade på sträckan eller under uppehållet (negativt = tåget tog igen tid). ` +
+    `Delsträckorna går mellan alla platser där Trafikverket rapporterar tåget, även sådana utan resandeutbyte. `));
+  if (hiddenCount || showAll) {
+    note.append(el("button", { type: "button", class: "link-btn", text: showAll ? "Visa bara ändringar" : `Visa alla ${merged.length} delsträckor`,
+      onclick: () => { body.dataset.all = showAll ? "" : "1"; renderDelayDetails(j); } }));
+  }
+  parts.push(note);
+  body.replaceChildren(...parts);
+}
+
+function showOnLine(date) {
+  state.lineDate = date;
+  stopPlay();
+  renderLine();
+  $("delay-details").open = true;
+  $("line-card").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 function renderSync(d) {
   const text = $("sync-text");
   if (d.last_poll_ok) {
@@ -423,10 +803,11 @@ function render() {
   const t = d.train;
   $("content").hidden = false;
   $("train-title").textContent = `Tåg ${t.ident}` + (t.origin ? ` · ${t.origin} → ${t.destination}` : "");
-  $("train-sub").textContent = [t.product, t.operator && t.operator !== t.product ? t.operator : null,
-    t.first_date ? `data sedan ${fmtDate(t.first_date, { day: "numeric", month: "long", year: "numeric" })}` : null].filter(Boolean).join(" · ");
+  $("train-sub").textContent = [t.product, t.operator && t.operator !== t.product ? t.operator : null].filter(Boolean).join(" · ");
+  $("train-age").textContent = ageText(t);
   renderSync(d);
   renderToday(d.journeys);
+  renderLine();
   renderKpis(d.summary, d.threshold);
   const has = d.summary.journeys > 0;
   $("charts").hidden = !has;
@@ -468,6 +849,8 @@ async function loadTrains() {
 
 function selectTrain(ident) {
   state.train = ident;
+  state.lineDate = null;
+  stopPlay();
   localStorage.setItem("train", ident);
   renderTrains();
   loadStats().catch((e) => showMessage(e.message));
@@ -482,7 +865,7 @@ $("periods").addEventListener("click", (e) => {
 });
 
 let resizeTimer;
-new ResizeObserver(() => { clearTimeout(resizeTimer); resizeTimer = setTimeout(renderCharts, 120); }).observe(document.querySelector("main"));
+new ResizeObserver(() => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { renderCharts(); renderLine(); }, 120); }).observe(document.querySelector("main"));
 
 (async function start() {
   try {
