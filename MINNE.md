@@ -3,7 +3,7 @@
 Överlämning mellan chattsessioner. Läs den här filen och `CLAUDE.md` först i en ny session,
 och uppdatera filen när något viktigt ändras (via PR, utan versionshöjning).
 
-*Senast uppdaterad: 2026-11-17, efter release v2.2.0, inför v2.3.0 (säkerhet).*
+*Senast uppdaterad: 2026-11-17, efter release v2.3.0, inför v2.3.1.*
 
 ## Vad Tågkoll är
 
@@ -115,7 +115,13 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
   kontrollerade; rättelsen finns i imagen. Användaren var (med rätta) irriterad: **testa alltid
   båda tågen/riktningarna** (t.ex. en spegelvänd kopia av 620 som 643 i en testdatabas) innan
   release.
-- **v2.3.0**: säkerhetsrelease efter granskning (se CHANGELOG). Viktigt för framtida ändringar:
+- **v2.3.1**: första Security-körningen (vid mergen av 2.3.0) granskade gamla 2.2.0-imagen och
+  öppnade ärende #18. Kvar i 2.3.0 enligt lokal Trivy: zlib1g (Debian) och setuptools 70.3.0 –
+  den senare är *pips egna medföljande paket* (pip/_vendor), inte appens. Rättat: `apt-get
+  upgrade` i Dockerfile och pip avinstalleras efter installationen (pip behövs inte i drift).
+  Lokal Trivy: 0 sårbarheter. Security körs nu via `workflow_run` efter Release i stället för
+  vid push. Ärende #18 stängs automatiskt vid nästa rena körning.
+- **v2.3.0** (2026-11-17), släppt och kontrollerad: säkerhetsrelease efter granskning (se CHANGELOG). Viktigt för framtida ändringar:
   uvicorn körs med `--no-proxy-headers` (annars skriver uvicorn om klientadressen och appens
   egen proxykontroll kringgås); `_password_tag()` får inte anropas inne i en öppen
   `db()`-transaktion (låser databasen); sessioner i tabellen `sessions`, hemligheten i
@@ -160,9 +166,9 @@ Användarens slutliga besked (efter flera rundor 2.1.2–2.1.5):
 - Det är okänt varför en bit efter Degerfors visades som "okänt" i 2.1.0 (troligen ett
   stationsnamn som inte matchade). 2.1.2 och senare täcker det med tolerantare namn och
   knutpunktsregeln.
-- **Säkerhetskontrollen hade aldrig körts** (schemat 04:17 UTC gav inga körningar trots aktivt
-  arbetsflöde). Från 2.3.0 körs den även vid push till main. Kontrollera efter mergen att
-  *Security* och *CodeQL* har körts och är gröna.
+- Säkerhetskontrollen körde första gången 2026-11-17 (rött på grund av gamla imagen, ärende
+  #18). Kontrollera efter 2.3.1 att *Security* blir grön och stänger #18, och att nattkörningen
+  04:17 UTC faktiskt sker.
 - Rekommenderat till användaren (görs i Cloudflare, inte i koden): Cloudflare Access för
   `/admin*` och `/api/admin*`, och en Rate Limiting-regel för `/api/*`. Ej bekräftat gjort.
 - Login-spärren per IP går att kringgå av den som når proxyn förbi Cloudflare och förfalskar
