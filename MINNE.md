@@ -3,7 +3,7 @@
 Överlämning mellan chattsessioner. Läs den här filen och `CLAUDE.md` först i en ny session,
 och uppdatera filen när något viktigt ändras (direkt till `main`, utan PR och release).
 
-*Senast uppdaterad: 2026-11-17, inför v2.5.0.*
+*Senast uppdaterad: 2026-11-17, efter release v2.5.0.*
 
 ## Vad Tågkoll är
 
@@ -100,6 +100,9 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
 
 ## Releaser
 
+- **v2.5.0** (2026-11-17), släppt och kontrollerad (PR #24, Release #17, `docker pull` av `2.5.0` och
+  `latest` utan inloggning, samma image, `DAYS_AHEAD` och *Kommande avgångar* finns i imagen):
+  kommande avgångar 7 dagar framåt och prognos före avgång. Ej provat mot riktiga data, se öppna punkter.
 - **v2.4.0** (2026-11-17), släppt och kontrollerad (PR #23, Release-körning #16, `docker pull` av
   `2.4.0` och `latest` utan inloggning, samma image, väljaren finns i imagen): välj och spela upp vilken insamlad avgång som helst i linjekortet.
   Importerade dagar kan inte spelas upp (bara slutförsening) – användaren är införstådd. Användaren
