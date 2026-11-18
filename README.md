@@ -47,6 +47,21 @@ inte anger kilometer.
   Rätta dem på adminsidan under *Spår på sträckorna*. Sträckor på andra banor visas som okända
   tills de anges där.
 
+## Samhällskostnad
+
+Kortet *Samhällskostnad* visar en ungefärlig kostnad för samhället av förseningar och inställda
+avgångar: summa och spann för vald period, uppdelning per slag (förlorad tid, missade möten,
+hotellnätter, andra resor), kostnad per vecka eller månad och de dyraste avgångarna. Tabellen
+över avgångar har en kolumn med kostnaden per avgång.
+
+- Tåg till Stockholm räknas som utresa (möten, konferenser och övningar står på spel), tåg från
+  Stockholm som hemresa (hotellnätter, alternativa resor, arbetstid dagen efter).
+- Beloppen är förväntade värden som bygger på schabloner. Knappen *Så räknar vi* förklarar
+  uträkningen med de värden som gäller.
+- Schablonerna ändras på adminsidan under *Kostnadsmodell* och sparas i tabellen `cost_params`.
+- Hela modellen beskrivs i [`docs/kostnadsmodell.md`](docs/kostnadsmodell.md). Koden finns i
+  `app/cost.py`.
+
 ## Besökare och integritet
 
 Dashboarden visar antalet unika besökare i dag. Besök på `/` räknas som en hash av IP-adress

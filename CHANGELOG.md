@@ -2,6 +2,16 @@
 
 Varje release får ett avsnitt `## [x.y.z] - ÅÅÅÅ-MM-DD`. Avsnittet blir releasetexten på GitHub.
 
+## [2.6.0] - 2026-11-18
+
+- Nytt: **Samhällskostnad.** Ett nytt kort på dashboarden visar ungefär vad förseningarna och de inställda avgångarna har kostat samhället under vald period. Där finns summan med ett spann (låg–hög), kostnad per avgång i snitt, hur mycket som beror på inställda respektive försenade avgångar, kostnaden per vecka eller månad uppdelad på förlorad tid, missade möten, hotellnätter och andra resor, och de dyraste avgångarna. Importerad historik räknas också.
+- Morgontåget till Stockholm räknas som en **utresa**: förlorad arbetstid och den förväntade kostnaden för möten, konferenser, utbildningar och övningar som resenärerna kommer sent till eller missar. En försening kostar bara för den som har mindre marginal till mötet än förseningen, så kostnaden tar ett hopp när förseningen passerar 30–60 minuter.
+- Kvällståget från Stockholm räknas som en **hemresa**: förlorad tid och, när tåget ställs in, hotellnätter, hyrbil eller buss och förlorad arbetstid dagen efter. Ställdes morgontåget in samma dag räknas inte de som aldrig åkte upp en gång till.
+- Knappen **Så räknar vi** öppnar en förklaring av uträkningen med alla schabloner som gäller just nu, räkneexempel och en kurva över hur kostnaden växer med förseningen.
+- Tabellen över avgångar har en ny kolumn, **Kostnad**.
+- På adminsidan finns ett nytt avsnitt, **Kostnadsmodell**, där alla schabloner kan ändras: antal resenärer, timvärden, andelar, sannolikheter, hotellpris med mera. Statistiken räknas om direkt, även bakåt i tiden, och allt går att återställa till standard. Ingen ändring i `.env` behövs.
+- Beloppen är förväntade värden som bygger på antaganden. En enskild avgång kan i verkligheten kosta mer eller mindre.
+
 ## [2.5.2] - 2026-11-17
 
 - Ångloket på linjen ryker bara när tåget rullar. När det står still – på en station, före avgång, framme vid slutstationen eller efter en inställning – kommer ingen rök ur skorstenen.

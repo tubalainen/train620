@@ -15,7 +15,7 @@
       <svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 22V11a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v11M9 16h14M12 26l2-4m6 4-2-4" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
       <div>
         <h1>Tågkoll Admin</h1>
-        <p>Bevakade tåg, import och radering</p>
+        <p>Bevakade tåg, kostnadsmodell, import och radering</p>
       </div>
     </div>
     <div class="sync">
@@ -75,6 +75,20 @@
             <tbody id="track-rows"></tbody>
           </table>
         </div>
+      </section>
+
+      <section class="card">
+        <h3>Kostnadsmodell</h3>
+        <p class="sub">Schablonerna bakom <em>Samhällskostnad</em> på dashboarden. Ändra ett värde och spara; statistiken räknas om direkt, även bakåt i tiden. Andelar i en grupp som inte summerar till 100 % skalas om. Förklaringen som besökarna ser under <em>Så räknar vi</em> visar alltid värdena som gäller.</p>
+        <form id="cost-form" class="cost-form" autocomplete="off">
+          <div id="cost-groups"></div>
+          <div class="cost-actions">
+            <button class="primary" type="submit" id="cost-save" disabled>Spara schabloner</button>
+            <button type="button" id="cost-undo" disabled>Ångra ändringar</button>
+            <button type="button" id="cost-reset">Återställ alla till standard</button>
+            <span id="cost-result" class="cost-result"></span>
+          </div>
+        </form>
       </section>
 
       <section class="card">

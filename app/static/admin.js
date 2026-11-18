@@ -148,6 +148,97 @@ async function loadTracks() {
 }
 $("track-filter").addEventListener("input", renderTracks);
 
+// ------------------------------------------------------------ kostnadsmodell
+let costModel = null;
+const SHARE_GROUPS = {
+  out_purpose: (k) => k.endsWith("_share"),
+  out_margin: () => true,
+  out_cancel: (k) => k.endsWith("_share"),
+  home_cancel: (k) => k.endsWith("_share"),
+};
+const fmtNum = (v) => v.toLocaleString("sv-SE", { maximumFractionDigits: 2 });
+const parseNum = (text) => Number(String(text).trim().replace(/\s/g, "").replace(",", "."));
+
+function costInputs() { return [...document.querySelectorAll("#cost-groups input[data-key]")]; }
+
+function costDirty() {
+  return costInputs().filter((i) => i.value.trim() !== "" && parseNum(i.value) !== Number(i.dataset.value));
+}
+
+function updateCostForm() {
+  for (const input of costInputs()) {
+    const v = parseNum(input.value);
+    input.closest(".cost-row").classList.toggle("changed", Number.isFinite(v) && v !== Number(input.dataset.default));
+  }
+  for (const [group, isShare] of Object.entries(SHARE_GROUPS)) {
+    const note = document.querySelector(`[data-share-note="${group}"]`);
+    if (!note) continue;
+    const sum = costInputs().filter((i) => i.dataset.group === group && isShare(i.dataset.key))
+      .reduce((a, i) => a + (parseNum(i.value) || 0), 0);
+    note.textContent = `Andelarna summerar till ${fmtNum(sum)} %` + (Math.abs(sum - 100) > 0.01 ? " – de skalas om till 100 % i beräkningen." : ".");
+    note.classList.toggle("warn", Math.abs(sum - 100) > 0.01);
+  }
+  const dirty = costDirty().length;
+  $("cost-save").disabled = !dirty;
+  $("cost-undo").disabled = !dirty;
+}
+
+function renderCostResult(m) {
+  const e = m.explain;
+  const kr = (n) => `${Math.round(n).toLocaleString("sv-SE")} kr`;
+  $("cost-result").textContent = `Mötesförlust ${kr(e.out.meeting_loss)} per resenär · inställd utresa ${kr(e.out.cancelled_total)} · inställd hemresa ${kr(e.home.cancelled_total)}`;
+}
+
+function renderCostForm(m) {
+  costModel = m;
+  const box = $("cost-groups");
+  box.replaceChildren();
+  for (const [group, title] of Object.entries(m.groups)) {
+    const fs = el("details", { class: "cost-group", open: ["common", "out", "home"].includes(group) ? "" : null },
+      el("summary", { text: title }));
+    if (SHARE_GROUPS[group]) fs.append(el("p", { class: "group-note", "data-share-note": group }));
+    for (const p of m.params.filter((x) => x.group === group)) {
+      const id = `cp-${p.key}`;
+      const input = el("input", { id, class: "field", inputmode: "decimal", value: fmtNum(p.value), "data-key": p.key,
+        "data-group": group, "data-value": p.value, "data-default": p.default, "aria-describedby": `${id}-help` });
+      input.addEventListener("input", updateCostForm);
+      fs.append(el("div", { class: "cost-row" },
+        el("label", { for: id, text: p.label }),
+        el("span", { class: "cost-input" }, input, el("span", { class: "unit", text: p.unit }),
+          el("span", { class: "default", text: `standard ${fmtNum(p.default)}` })),
+        el("span", { class: "help", id: `${id}-help`, text: p.help })));
+    }
+    box.append(fs);
+  }
+  updateCostForm();
+  renderCostResult(m);
+}
+
+async function loadCostModel() { renderCostForm(await api("/api/cost/model")); }
+
+$("cost-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const values = {};
+  for (const input of costDirty()) {
+    const v = parseNum(input.value);
+    if (!Number.isFinite(v)) { input.focus(); return showMessage(`Ange ett tal: ${input.closest(".cost-row").querySelector("label").textContent}`); }
+    values[input.dataset.key] = v;
+  }
+  try {
+    const m = await api("/api/admin/cost-params", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ values }) });
+    renderCostForm(m);
+    showMessage(`${Object.keys(values).length} schabloner sparades. Statistiken är omräknad.`, true);
+  } catch (err) { showMessage(err.message); }
+});
+$("cost-undo").addEventListener("click", () => costModel && renderCostForm(costModel));
+$("cost-reset").addEventListener("click", async () => {
+  if (!confirm("Återställ alla schabloner till standardvärdena?")) return;
+  try {
+    renderCostForm(await post("/api/admin/cost-params/reset", {}));
+    showMessage("Alla schabloner är återställda till standard.", true);
+  } catch (err) { showMessage(err.message); }
+});
+
 // ---------------------------------------------------------------- import
 const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
 const mentions = (name, ident) => new RegExp(`(^|\\D)${ident}(\\D|$)`).test(name);
@@ -250,7 +341,7 @@ $("refresh").addEventListener("click", async (e) => {
 
 async function enterPanel() {
   showView("panel");
-  await Promise.all([loadTrains(), loadTracks(), api("/api/health").then(renderPoll)]);
+  await Promise.all([loadTrains(), loadTracks(), loadCostModel(), api("/api/health").then(renderPoll)]);
 }
 
 (async function start() {

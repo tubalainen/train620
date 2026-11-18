@@ -31,6 +31,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from . import cost
 from .security import RateLimiter, SecurityMiddleware, client_ip, is_https
 
 API_URL = "https://api.trafikinfo.trafikverket.se/v2/data.json"
@@ -128,6 +129,10 @@ CREATE TABLE IF NOT EXISTS delay_segments (
     line TEXT,
     deviations TEXT NOT NULL,
     PRIMARY KEY (train_ident, departure_date, seq)
+);
+CREATE TABLE IF NOT EXISTS cost_params (
+    key TEXT PRIMARY KEY,
+    value REAL NOT NULL
 );
 """
 
@@ -758,6 +763,98 @@ def train_overview(ident: str) -> dict:
     }
 
 
+# ------------------------------------------------------------- samhällskostnad
+
+def load_cost_params() -> dict[str, float]:
+    """Schablonerna: inbyggda värden, med det som ändrats på adminsidan ovanpå."""
+    with db() as conn:
+        saved = {r["key"]: r["value"] for r in conn.execute("SELECT key, value FROM cost_params")}
+    return {**cost.DEFAULTS, **{k: v for k, v in saved.items() if k in cost.DEFAULTS}}
+
+
+def train_profile(ident: str) -> str | None:
+    t = train_overview(ident)
+    return cost.profile_for(t["origin"], t["destination"])
+
+
+def morning_statuses(exclude: str, since: str | None) -> dict[str, str]:
+    """Status per dag för tågen till Stockholm, så att hemresan inte räknar dem som aldrig åkte upp."""
+    with db() as conn:
+        idents = [r["ident"] for r in conn.execute("SELECT ident FROM trains WHERE ident <> ?", (exclude,))]
+    out: dict[str, str] = {}
+    rank = {"cancelled": 2, "partial": 1}
+    for ident in idents:
+        if train_profile(ident) != "out":
+            continue
+        for j in load_journeys(ident, since):
+            if rank.get(j["status"], 0) > rank.get(out.get(j["date"]), 0):
+                out[j["date"]] = j["status"]
+    return out
+
+
+def cost_stats(ident: str, journeys: list[dict], since: str | None, profile: str | None) -> dict | None:
+    """Samhällskostnad för avgångarna i perioden: summa, spann, uppdelning och per månad eller vecka."""
+    if not profile:
+        return None
+    p = load_cost_params()
+    morning = morning_statuses(ident, since) if profile == "home" else {}
+    rows = []
+    for j in journeys:
+        stayed = cost.stayed_home_share(p, morning.get(j["date"])) if profile == "home" else 0.0
+        c = cost.journey_cost(p, profile, j["status"], j["delay"], stayed)
+        if c:
+            rows.append({"date": j["date"], "status": j["status"], "delay": j["delay"], **c,
+                         "paired": stayed > 0})
+    total = sum(r["total"] for r in rows)
+    kinds = {k: sum(r["kinds"][k] for r in rows) for k in cost.KINDS}
+    by_status = {s: sum(r["total"] for r in rows if r["status"] == s) for s in FINISHED}
+    dates = sorted(r["date"] for r in rows)
+    weekly = bool(dates) and (date.fromisoformat(dates[-1]) - date.fromisoformat(dates[0])).days <= 120
+    periods: dict[str, dict] = {}
+    for r in rows:
+        d = date.fromisoformat(r["date"])
+        if weekly:
+            start = d - timedelta(days=d.weekday())
+            key, label = start.isoformat(), f"v.{start.isocalendar().week}"
+        else:
+            key, label = d.strftime("%Y-%m"), d.strftime("%Y-%m")
+        b = periods.setdefault(key, {"start": key, "label": label, "total": 0, "journeys": 0,
+                                     "kinds": {k: 0 for k in cost.KINDS}})
+        b["total"] += r["total"]
+        b["journeys"] += 1
+        for k in cost.KINDS:
+            b["kinds"][k] += r["kinds"][k]
+    return {
+        "profile": profile,
+        "total": total,
+        "low": round(total * p["range_low"] / 100),
+        "high": round(total * p["range_high"] / 100),
+        "journeys": len(rows),
+        "per_journey": round(total / len(rows)) if rows else None,
+        "kinds": kinds,
+        "kind_labels": cost.KINDS,
+        "by_status": by_status,
+        "period": "week" if weekly else "month",
+        "periods": [periods[k] for k in sorted(periods)],
+        "top": sorted((r for r in rows if r["total"] > 0), key=lambda r: r["total"], reverse=True)[:5],
+        "by_date": {r["date"]: r["total"] for r in rows},
+        "paired_days": sum(r["paired"] for r in rows),
+    }
+
+
+def cost_model() -> dict:
+    p = load_cost_params()
+    return {
+        "groups": cost.GROUPS,
+        "kinds": cost.KINDS,
+        "params": [{"key": x.key, "group": x.group, "label": x.label, "unit": x.unit, "default": x.default,
+                    "value": p[x.key], "help": x.help, "max": x.max} for x in cost.PARAMS],
+        "margins": [{"key": k, "label": label, "from": lo, "to": hi} for k, label, lo, hi, _ in cost.MARGINS],
+        "purposes": [{"key": k, "label": label} for k, label, *_ in cost.PURPOSES],
+        "explain": {"out": cost.explain(p, "out"), "home": cost.explain(p, "home")},
+    }
+
+
 # ------------------------------------------------------------------------- API
 
 @asynccontextmanager
@@ -851,6 +948,14 @@ class ImportIn(BaseModel):
     source: str = Field("import", max_length=60)
 
 
+class CostParamsIn(BaseModel):
+    values: dict[str, float] = Field(max_length=200)
+
+
+class CostResetIn(BaseModel):
+    keys: list[str] | None = Field(None, max_length=200)
+
+
 class TrackIn(BaseModel):
     from_sig: str = Field(max_length=20)
     to_sig: str = Field(max_length=20)
@@ -939,8 +1044,10 @@ def compute_stats(train: str, days: int | None) -> dict:
     since = (datetime.now(TZ).date() - timedelta(days=days - 1)).isoformat() if days else None
     journeys = load_journeys(train, since)
     meta = get_meta()
+    overview = train_overview(train)
     return {
-        "train": train_overview(train),
+        "train": overview,
+        "cost": cost_stats(train, journeys, since, cost.profile_for(overview["origin"], overview["destination"])),
         "threshold": DELAY_THRESHOLD,
         "days": days,
         "summary": summarize(journeys),
@@ -1069,6 +1176,41 @@ def reset_track(from_sig: str, to_sig: str):
         with db() as conn:
             conn.execute("DELETE FROM track_sections WHERE from_sig = ? AND to_sig = ?", pair_key(from_sig, to_sig))
         recompute_all_segments()
+
+
+@app.get("/api/cost/model")
+def get_cost_model():
+    """Schablonerna och mellanresultaten, för informationsrutan och adminsidan."""
+    return cached(("cost_model",), cost_model)
+
+
+@app.put("/api/admin/cost-params", dependencies=admin_only)
+def set_cost_params(body: CostParamsIn):
+    try:
+        values = cost.validate(body.values)
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from None
+    with db() as conn:
+        for key, value in values.items():
+            if value == cost.DEFAULTS[key]:
+                conn.execute("DELETE FROM cost_params WHERE key = ?", (key,))
+            else:
+                conn.execute("INSERT INTO cost_params VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                             (key, value))
+    data_changed()
+    return cost_model()
+
+
+@app.post("/api/admin/cost-params/reset", dependencies=admin_only)
+def reset_cost_params(body: CostResetIn):
+    """Återställer schablonerna (alla, eller de som anges) till de inbyggda värdena."""
+    with db() as conn:
+        if body.keys is None:
+            conn.execute("DELETE FROM cost_params")
+        else:
+            conn.executemany("DELETE FROM cost_params WHERE key = ?", [(k,) for k in body.keys])
+    data_changed()
+    return cost_model()
 
 
 @app.get("/api/admin/session")
