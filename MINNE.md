@@ -3,7 +3,7 @@
 Överlämning mellan chattsessioner. Läs den här filen och `CLAUDE.md` först i en ny session,
 och uppdatera filen när något viktigt ändras (direkt till `main`, utan PR och release).
 
-*Senast uppdaterad: 2026-11-18, efter release v2.6.1.*
+*Senast uppdaterad: 2026-11-18, efter release v2.6.2.*
 
 ## Vad Tågkoll är
 
@@ -104,6 +104,11 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
 
 ## Releaser
 
+- **v2.6.2** (2026-11-18), släppt och kontrollerad (PR #29, Release #22, `docker pull` av `2.6.2` och
+  `latest` utan inloggning, samma image): *I dag* och linjekortet visar kostnaden för den aktuella
+  avgången (`costLine` i `app.js`; `cost.flags` i `/api/stats`, `cost` i `/api/journey`). Rättat:
+  `.today[hidden]` döljs (tom ruta när *Kommande avgångar* saknades). Användaren bad om funktionen
+  efter en skärmbild av ett inställt 620.
 - **v2.6.1** (2026-11-18), släppt och kontrollerad (PR #28, Release #21, `docker pull` av `2.6.1` och
   `latest` utan inloggning, samma image): inställt i förväg (≥ 8 h före avgång, via `canceled_known_at`
   = minsta `modified_time` bland inställda rader) räknas 40 % (utresa) / 30 % (hemresa) av akut;
