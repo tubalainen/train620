@@ -403,7 +403,7 @@ function renderStations(stations) {
 
 function stopsRow(j) {
   if (!j.stops.length) {
-    return el("tr", { class: "stops" }, el("td", { colspan: 6, text: `Importerad uppgift (${j.source}) – stationsdetaljer saknas.` }));
+    return el("tr", { class: "stops" }, el("td", { colspan: 7, text: `Importerad uppgift (${j.source}) – stationsdetaljer saknas.` }));
   }
   const body = el("tbody");
   for (const s of j.stops) {
@@ -421,7 +421,7 @@ function stopsRow(j) {
   const show = j.points.length > 1
     ? el("button", { type: "button", class: "show-line", text: "Visa på linjen ↑", onclick: (e) => { e.stopPropagation(); showOnLine(j.date); } })
     : null;
-  return el("tr", { class: "stops" }, el("td", { colspan: 6 }, show, table));
+  return el("tr", { class: "stops" }, el("td", { colspan: 7 }, show, table));
 }
 
 const PAGE = 30;
@@ -433,7 +433,7 @@ function renderTable(journeys, limit = PAGE) {
   more.textContent = `Visa fler (${journeys.length - limit} till)`;
   more.onclick = () => renderTable(journeys, limit + 60);
   journeys = journeys.slice(0, limit);
-  if (!journeys.length) body.append(el("tr", {}, el("td", { colspan: 6, text: "Inga avgångar i perioden ännu." })));
+  if (!journeys.length) body.append(el("tr", {}, el("td", { colspan: 7, text: "Inga avgångar i perioden ännu." })));
   for (const j of journeys) {
     const row = el("tr", { class: "journey", tabindex: 0, "aria-expanded": "false" },
       el("td", { text: fmtLongDate(j.date) }),
@@ -441,6 +441,7 @@ function renderTable(journeys, limit = PAGE) {
       el("td", { class: "num", text: hhmm(j.planned_arrival) }),
       el("td", { class: "num", text: hhmm(j.actual_arrival) }),
       el("td", { class: "num", text: fmtDelay(j.delay) }),
+      el("td", { class: "num cost-col", text: costCell(j.date) }),
       el("td", { class: "dev", text: j.deviations.join(", ") }));
     const toggle = () => {
       const open = row.nextElementSibling?.classList.contains("stops");
@@ -452,6 +453,321 @@ function renderTable(journeys, limit = PAGE) {
     body.append(row);
   }
 }
+
+
+// ---------------------------------------------------------- samhällskostnad
+// Fasta färger per kostnadsslag (samma slag har alltid samma färg, oavsett vilka som syns).
+const KIND_COLORS = { time: "var(--series-1)", meetings: "var(--series-2)", nextday: "var(--series-3)",
+                      hotel: "var(--series-4)", travel: "var(--series-5)", ops: "var(--series-6)" };
+const KIND_ORDER = ["time", "meetings", "nextday", "hotel", "travel", "ops"];
+// Slag som inte kan förekomma i en riktning visas inte i uppdelningen.
+const KIND_PROFILE = { meetings: "out", nextday: "home", hotel: "home" };
+
+/** Kronor i läsbar form: "1,2 milj. kr", "350 000 kr". */
+function fmtKr(n, { short = false } = {}) {
+  if (n === null || n === undefined) return "–";
+  if (Math.abs(n) >= 1e6) return `${nf(n / 1e6, n >= 1e7 ? 0 : 1)} milj.${short ? "" : " kr"}`;
+  if (Math.abs(n) >= 1e4) return `${nf(Math.round(n / 1000) * 1000)}${short ? "" : " kr"}`;
+  return `${nf(Math.round(n / 100) * 100)}${short ? "" : " kr"}`;
+}
+
+function costCell(date) {
+  const c = state.data?.cost?.by_date?.[date];
+  return c === undefined ? "–" : c === 0 ? "0 kr" : fmtKr(c);
+}
+
+/** Staplade staplar. items: {label, parts: [{key, value, color}], total, tip}. */
+function stackedChart(container, { items, height = 240 }) {
+  const max = Math.max(1, ...items.map((i) => i.total));
+  const ticks = niceTicks(0, max);
+  const { root, inner, y } = frame(container, height, ticks, (v) => fmtKr(v, { short: true }), { l: 58, r: 12, t: 14, b: 26 });
+  const band = inner.w / items.length;
+  const barW = Math.max(2, Math.min(28, band - 4));
+  const every = Math.ceil(items.length / Math.max(1, Math.floor(inner.w / 62)));
+  items.forEach((item, i) => {
+    const g = svg("g", { class: "band" }, root);
+    const cx = inner.x + band * i + band / 2;
+    svg("rect", { class: "hit", x: cx - band / 2, y: inner.y, width: band, height: inner.h }, g);
+    const parts = item.parts.filter((p) => p.value > 0);
+    let base = 0;
+    parts.forEach((part, n) => {
+      const y0 = y(base), y1 = y(base + part.value);
+      base += part.value;
+      const top = n === parts.length - 1;
+      const gap = n > 0 ? 2 : 0; // 2 px yta mellan segmenten
+      const h = y0 - y1 - gap;
+      if (h <= 0.5) return;
+      if (top) svg("path", { class: "mark", d: barPath(cx - barW / 2, barW, y0 - gap, y1), fill: part.color }, g);
+      else svg("rect", { class: "mark", x: cx - barW / 2, y: y1, width: barW, height: h, fill: part.color }, g);
+    });
+    if (i % every === 0) {
+      const t = svg("text", { x: cx, y: inner.y + inner.h + 18, "text-anchor": "middle" }, root);
+      t.textContent = item.label;
+    }
+    g.addEventListener("pointermove", (e) => { g.classList.add("hover"); showTip(e, item.tip); });
+    g.addEventListener("pointerleave", () => { g.classList.remove("hover"); hideTip(); });
+  });
+}
+
+function renderCostChart() {
+  const c = state.data?.cost;
+  if (!c || !c.periods.length) return placeholder($("cost-chart"), "Ingen kostnad att visa i perioden.");
+  const labels = c.kind_labels;
+  stackedChart($("cost-chart"), {
+    items: c.periods.map((p) => ({
+      label: c.period === "week" ? p.label : fmtDate(p.start + "-01", { month: "short", year: "2-digit" }),
+      total: p.total,
+      parts: KIND_ORDER.map((k) => ({ key: k, value: p.kinds[k], color: KIND_COLORS[k] })),
+      tip: {
+        color: "var(--series-1)", value: fmtKr(p.total),
+        label: c.period === "week" ? `${p.label}, från ${fmtDate(p.start)}` : fmtDate(p.start + "-01", { month: "long", year: "numeric" }),
+        extra: `${nf(p.journeys)} avgångar. ` + KIND_ORDER.filter((k) => p.kinds[k] > 0).map((k) => `${labels[k]}: ${fmtKr(p.kinds[k])}`).join(", "),
+      },
+    })),
+  });
+}
+
+function renderCost() {
+  const card = $("cost-card");
+  const c = state.data.cost;
+  card.hidden = !c || !c.journeys;
+  if (card.hidden) return;
+  const dir = c.profile === "out" ? "utresa till Stockholm" : "hemresa från Stockholm";
+  $("cost-sub").textContent = `Ungefärlig kostnad för samhället av förseningar och inställda avgångar, räknad som ${dir} med ${nf(c.passengers)} resenärer per avgång. ` +
+    "Förväntade värden enligt schabloner – en enskild avgång kan kosta mer eller mindre.";
+  $("cost-total").textContent = fmtKr(c.total);
+  $("cost-range").textContent = `Spann ${fmtKr(c.low)} – ${fmtKr(c.high)} (lågt och högt scenario)`;
+  $("cost-avg").textContent = fmtKr(c.per_journey);
+  $("cost-avg-note").textContent = `${nf(c.journeys)} avslutade avgångar`;
+  const s = state.data.summary;
+  const nCancel = s.cancelled + s.partial;
+  const cancelCost = c.by_status.cancelled + c.by_status.partial;
+  const delayCost = c.by_status.delayed + c.by_status.ontime;
+  const share = (v) => (c.total ? `${nf((100 * v) / c.total)} % av kostnaden` : "");
+  $("cost-cancel").textContent = fmtKr(cancelCost);
+  $("cost-cancel-note").textContent = `${nf(nCancel)} avgångar · ${share(cancelCost)}`;
+  $("cost-delay").textContent = fmtKr(delayCost);
+  $("cost-delay-note").textContent = `${nf(s.delayed)} avgångar · ${share(delayCost)}`;
+  $("cost-hidden-tile").hidden = c.hidden === null;
+  if (c.hidden !== null) {
+    $("cost-hidden").textContent = fmtKr(c.hidden);
+    $("cost-hidden-note").textContent = `${nf(c.hidden_per_day)} resenärer per avgång åker kvällen före för säkerhets skull. Ingår inte i summan.`;
+  }
+
+  const labels = c.kind_labels;
+  const used = KIND_ORDER.filter((k) => c.kinds[k] > 0);
+  $("cost-period-title").textContent = c.period === "week" ? "Kostnad per vecka" : "Kostnad per månad";
+  $("cost-legend").replaceChildren(...used.map((k) => el("span", {},
+    el("span", { class: "swatch", style: `background:${KIND_COLORS[k]}` }), document.createTextNode(labels[k]))));
+  renderCostChart();
+
+  const kinds = el("div", { class: "stations cost-kinds" });
+  const maxKind = Math.max(1, ...KIND_ORDER.map((k) => c.kinds[k]));
+  for (const k of KIND_ORDER) {
+    if (!c.kinds[k] && KIND_PROFILE[k] && KIND_PROFILE[k] !== c.profile) continue;
+    kinds.append(el("div", { class: "name" }, el("span", { class: "swatch", style: `background:${KIND_COLORS[k]}` }), document.createTextNode(" " + labels[k])),
+      el("div", { class: "track" }, el("div", { class: "bar", style: `width:${(100 * c.kinds[k]) / maxKind}%;background:${KIND_COLORS[k]}` })),
+      el("div", { class: "val", text: fmtKr(c.kinds[k]) }));
+  }
+  $("cost-kinds").replaceChildren(kinds);
+
+  $("cost-top").replaceChildren(c.top.length
+    ? el("table", { class: "cost-top" }, el("tbody", {}, ...c.top.map((r) => el("tr", {},
+        el("td", { text: fmtLongDate(r.date) }),
+        el("td", {}, statusBadge(r.status, r.status === "delayed" ? fmtDelay(r.delay) : undefined)),
+        el("td", { class: "num", text: fmtKr(r.total) })))))
+    : el("p", { class: "sub", text: "Inga avgångar med kostnad i perioden." }));
+
+  $("cost-note").textContent = c.paired_days
+    ? `${nf(c.paired_days)} dagar var morgontåget till Stockholm inställt. Resenärer som då aldrig åkte upp räknas inte igen på hemresan.`
+    : "";
+}
+
+// -------------------------------------------------------- informationsrutan
+let costModel = null;
+const pct0 = (v) => `${nf(v, v % 1 ? 1 : 0)} %`;
+const unitText = (v, unit) => unit === "%" ? pct0(v) : unit === "kr" ? `${nf(v)} kr` : unit === "kr/h" ? `${nf(v)} kr/h`
+  : unit === "h" ? `${nf(v, v % 1 ? 1 : 0)} h` : unit === "min" ? `${nf(v)} min` : nf(v);
+
+function infoTable(head, rows, numeric = []) {
+  return el("div", { class: "table-wrap" }, el("table", { class: "info-table" },
+    el("thead", {}, el("tr", {}, ...head.map((h, i) => el("th", { class: numeric.includes(i) ? "num" : "", text: h })))),
+    el("tbody", {}, ...rows.map((r) => el("tr", { class: r.strong ? "strong" : "" },
+      ...r.cells.map((c, i) => el("td", { class: numeric.includes(i) ? "num" : "", text: c })))))));
+}
+
+/** Kostnad mot försening för båda riktningarna, i samma skala. */
+function curveChart(container, explain) {
+  container.replaceChildren();
+  const series = [
+    { key: "out", label: "Utresa (morgon)", color: "var(--series-1)", pts: explain.out.curve },
+    { key: "home", label: "Hemresa (kväll)", color: "var(--series-2)", pts: explain.home.curve },
+  ];
+  const max = Math.max(1, ...series.flatMap((s) => s.pts.map((p) => p.total)));
+  const ticks = niceTicks(0, max);
+  const { root, inner, y, width } = frame(container, 220, ticks, (v) => fmtKr(v, { short: true }), { l: 58, r: 16, t: 14, b: 30 });
+  const pts = series[0].pts;
+  const maxD = pts[pts.length - 1].delay;
+  const x = (d) => inner.x + (inner.w * d) / maxD;
+  for (let d = 0; d <= maxD; d += 30) {
+    const t = svg("text", { x: x(d), y: inner.y + inner.h + 18, "text-anchor": "middle" }, root);
+    t.textContent = `${d} min`;
+  }
+  for (const s of series) {
+    svg("path", { d: s.pts.map((p, i) => `${i ? "L" : "M"}${x(p.delay)},${y(p.total)}`).join(" "),
+      fill: "none", stroke: s.color, "stroke-width": 2, "stroke-linejoin": "round" }, root);
+  }
+  const cross = svg("line", { y1: inner.y, y2: inner.y + inner.h, stroke: "var(--axis)", visibility: "hidden" }, root);
+  const dots = series.map((s) => svg("circle", { r: 5, fill: s.color, stroke: "var(--surface)", "stroke-width": 2, visibility: "hidden" }, root));
+  const hit = svg("rect", { class: "hit", x: inner.x, y: inner.y, width: inner.w, height: inner.h }, root);
+  hit.addEventListener("pointermove", (e) => {
+    const box = root.getBoundingClientRect();
+    const px = ((e.clientX - box.left) / box.width) * width;
+    const i = Math.max(0, Math.min(pts.length - 1, Math.round(((px - inner.x) / inner.w) * (pts.length - 1))));
+    const d = pts[i].delay;
+    cross.setAttribute("x1", x(d)); cross.setAttribute("x2", x(d)); cross.setAttribute("visibility", "visible");
+    series.forEach((s, n) => { dots[n].setAttribute("cx", x(d)); dots[n].setAttribute("cy", y(s.pts[i].total)); dots[n].setAttribute("visibility", "visible"); });
+    showTip(e, { color: "var(--series-1)", value: `+${d} min försening`, label: series.map((s) => `${s.label}: ${fmtKr(s.pts[i].total)}`).join(" · ") });
+  });
+  hit.addEventListener("pointerleave", () => { cross.setAttribute("visibility", "hidden"); dots.forEach((d) => d.setAttribute("visibility", "hidden")); hideTip(); });
+  container.prepend(el("div", { class: "legend" }, ...series.map((s) => el("span", {},
+    el("span", { class: "swatch", style: `background:${s.color}` }), document.createTextNode(s.label)))));
+}
+
+function renderCostInfo(m) {
+  const v = Object.fromEntries(m.params.map((p) => [p.key, p.value]));
+  const changed = m.params.filter((p) => p.value !== p.default);
+  const ex = m.explain;
+  const h = (text) => el("h3", { text });
+  const p = (text) => el("p", { text });
+  const sumShares = (keys) => keys.reduce((a, k) => a + v[k], 0) || 1;
+  const share = (key, keys) => pct0((100 * v[key]) / sumShares(keys));
+  const groupKeys = ["share_consult", "share_public", "share_other"];
+  const kr = (n) => `${nf(Math.round(n))} kr`;
+
+  const purposeKeys = m.purposes.map((x) => `purpose_${x.key}_share`);
+  const purposeRows = m.purposes.map((x) => {
+    const sh = v[`purpose_${x.key}_share`] / sumShares(purposeKeys);
+    return { cells: [x.label, pct0(100 * sh), pct0(v[`purpose_${x.key}_prob`]), kr(v[`purpose_${x.key}_cost`]),
+      kr(sh * v[`purpose_${x.key}_prob`] / 100 * v[`purpose_${x.key}_cost`])] };
+  });
+  purposeRows.push({ strong: true, cells: ["Förväntad mötesförlust per tjänsteresenär", "", "", "", kr(ex.out.meeting_loss)] });
+
+  const outKeys = ["out_next_share", "out_car_share", "out_digital_share", "out_stay_share"];
+  const homeKeys = ["home_next_share", "home_hotel_share", "home_alt_share", "home_other_share"];
+  const marginKeys = m.margins.map((x) => `margin_${x.key}`);
+  const exampleRows = (list) => list.map((e) => ({ cells: [`+${e.delay} min`, ...KIND_ORDER.filter((k) => k !== "ops" && k !== "hotel" && k !== "travel").map((k) => fmtKr(e.kinds[k])), fmtKr(e.total)] }));
+  const sc = (prof) => ex[prof].scenarios;
+
+  const curve = el("div", { class: "chart info-curve" });
+  $("cost-info-body").replaceChildren(
+    el("p", { class: "lead", text: "Tågkoll räknar ut en ungefärlig kostnad för samhället för varje avgång: antal drabbade resenärer × kostnad per resenär, plus ersättningstrafik när tåget ställs in. " +
+      "Beloppen är förväntade värden som bygger på schabloner. En enskild avgång kan i verkligheten kosta mer eller mindre, men över många avgångar ger genomsnittet en rimlig bild av storleksordningen." }),
+    changed.length ? el("p", { class: "info-changed", text: `${changed.length} schabloner har ändrats av administratören. Siffrorna nedan visar värdena som gäller nu.` }) : "",
+
+    h("Resenärerna"),
+    p(`${nf(v.seats)} platser × ${pct0(v.occupancy)} beläggning = ${nf(ex.out.passengers)} resenärer per avgång. De delas i tre grupper:`),
+    infoTable(["Grupp", "Andel", "Värde per timme"], [
+      { cells: ["Konsulter och näringsliv", share("share_consult", groupKeys), `${nf(v.hour_consult)} kr/h i arbetstid`] },
+      { cells: ["Offentlig sektor", share("share_public", groupKeys), `${nf(v.hour_public)} kr/h i arbetstid`] },
+      { cells: ["Övriga (pendlare, studenter, privatresor)", share("share_other", groupKeys), `${nf(ex.out.delay_hour)} kr/h förseningstid`] },
+    ], [1]),
+    p(`Förseningstid på fritid värderas enligt Trafikverkets kalkylvärden (ASEK): restidsvärdet ${nf(v.hour_leisure)} kr/h × ${nf(v.delay_factor, 1)} = ${nf(ex.out.delay_hour)} kr/h. ` +
+      `På kvällen värderas allas tid så, eftersom hemresan sker efter arbetstid.`),
+    p(`Arbetstid går bara delvis förlorad. Ombord på ett försenat tåg antas tjänsteresenärerna kunna arbeta ${pct0(v.prod_onboard)} av tiden, på perrongen, i ersättningsbuss eller bakom ratten ${pct0(v.prod_offboard)}.`),
+
+    h("Kostnad över försening"),
+    p("Kurvan visar vad en avgång kostar vid olika förseningar. Utresan tar hopp när marginalerna till mötena tar slut och när en del vänder hem. Hemresan växer när man kommer hem så sent att förmiddagen efter påverkas."),
+    curve,
+
+    h("Utresa: förväntad mötesförlust"),
+    p("Vad kostar det när en tjänsteresenär inte kommer fram alls? Det beror på vad hen skulle göra i Stockholm, och det är inte säkert att frånvaron får betydelse. Därför vägs varje ändamål med en sannolikhet."),
+    infoTable(["Ändamål", "Andel", "Sannolikhet", "Kostnad när den får betydelse", "Förväntat"], purposeRows, [1, 2, 3, 4]),
+
+    h("Utresa: försenat tåg"),
+    p("Mötesförlusten räknas bara för den som har mindre marginal mellan ankomst och mötets början än förseningen. Inom varje intervall antas resenärerna vara jämnt fördelade."),
+    infoTable(["Marginal till mötet", "Andel"], m.margins.map((x) => ({ cells: [x.label, share(`margin_${x.key}`, marginKeys)] })), [1]),
+    p(`Den som kommer för sent förlorar ${pct0(v.effect_lt30)} av mötesförlusten vid under 30 minuter, ${pct0(v.effect_30_90)} vid 30–90 minuter och ${pct0(v.effect_gt90)} vid mer än 90 minuter. ` +
+      `Är tåget mer än ${nf(v.abort_after)} minuter sent vänder ${pct0(v.abort_share)} av tjänsteresenärerna hem: de förlorar ${unitText(v.abort_hours, "h")} arbetstid och hela mötesförlusten.`),
+    infoTable(["Försening", "Tid", "Möten", "Dagen efter", `Summa (${nf(ex.out.passengers)} resenärer)`], exampleRows(ex.out.delay_examples), [1, 2, 3, 4]),
+
+    h("Utresa: inställt tåg"),
+    infoTable(["Vad tjänsteresenären gör", "Andel", "Antagande"], [
+      { cells: ["Tar nästa tåg", share("out_next_share", outKeys), `${unitText(v.out_next_hours, "h")} senare med ${pct0(v.prod_offboard)} arbetsförmåga, ${pct0(v.effect_gt90)} av mötesförlusten`] },
+      { cells: ["Tar bilen", share("out_car_share", outKeys), `${kr(v.out_car_cost)} och ${unitText(v.out_car_hours, "h")} utan arbete, ${pct0(v.out_car_effect)} av mötesförlusten`] },
+      { cells: ["Deltar digitalt", share("out_digital_share", outKeys), `${unitText(v.out_digital_hours, "h")} omplanering, ${pct0(v.out_digital_effect)} av mötesförlusten`] },
+      { cells: ["Ställer in resan", share("out_stay_share", outKeys), `${unitText(v.out_stay_hours, "h")} förlorad arbetstid, hela mötesförlusten`] },
+      { strong: true, cells: [`Per avgång (${nf(ex.out.passengers)} resenärer)`, "", fmtKr(ex.out.cancelled.total)] },
+    ], [1]),
+    p(`Övriga resenärer tar nästa tåg (förseningstid). I summan ingår ersättningstrafik och hantering, ${kr(v.ops_cost)} per inställd avgång.`),
+
+    h("Hemresa: försenat tåg"),
+    p(`Förseningen värderas till ${nf(ex.home.delay_hour)} kr per timme och resenär. Kommer man hem mer än ${nf(v.late_after)} minuter för sent förlorar tjänsteresenärerna ${unitText(v.nextday_hours, "h")} arbetstid förmiddagen efter, ` +
+      `och ${pct0(v.family_share)} måste lösa hämtning eller barnomsorg (${kr(v.family_cost)}). Den effekten växer gradvis under timmen före gränsen.`),
+    infoTable(["Försening", "Tid", "Möten", "Dagen efter", `Summa (${nf(ex.home.passengers)} resenärer)`], exampleRows(ex.home.delay_examples), [1, 2, 3, 4]),
+
+    h("Hemresa: inställt tåg"),
+    infoTable(["Vad resenären gör", "Andel", "Antagande"], [
+      { cells: ["Väntar på nästa tåg", share("home_next_share", homeKeys), `${unitText(v.home_next_hours, "h")} senare`] },
+      { cells: ["Hotellnatt", share("home_hotel_share", homeKeys), `${kr(v.home_hotel_cost)}, ${unitText(v.home_hotel_evening, "h")} förlorad kväll, ${unitText(v.home_hotel_work, "h")} arbetstid dagen efter`] },
+      { cells: ["Hyrbil eller buss", share("home_alt_share", homeKeys), `${unitText(v.home_alt_hours, "h")} senare, ${kr(v.home_alt_cost)}`] },
+      { cells: ["Annat (taxi, skjuts, sitter fast)", share("home_other_share", homeKeys), kr(v.home_other_cost)] },
+      { strong: true, cells: [`Per avgång (${nf(ex.home.passengers)} resenärer)`, "", fmtKr(ex.home.cancelled.total)] },
+    ], [1]),
+    p(`Alla som kommer hem sent räknas också med förmiddagen efter och familjelogistik, och ersättningstrafiken (${kr(v.ops_cost)}) ingår.`),
+
+    h("Kopplingen mellan morgon och kväll"),
+    p(`Den som inte kom iväg på morgonen åker inte hem på kvällen. Om ett bevakat tåg till Stockholm ställdes in samma dag antas ${pct0(v.home_paired_share)} av hemresenärerna ha åkt upp med det, ` +
+      "och de tjänsteresenärer som då deltog digitalt eller ställde in resan räknas inte igen på hemresan. Var morgontåget bara försenat påverkas inte hemresan."),
+
+    h("Spannet: lågt och högt scenario"),
+    p(`Spannet räknas med andra schabloner för det som är mest osäkert. Lågt: ${pct0(v.low_occupancy)} beläggning, konsulttimme ${nf(v.low_hour_consult)} kr (arbetskostnad), ${pct0(v.low_prod_onboard)} arbetsförmåga ombord. ` +
+      `Högt: ${pct0(v.high_occupancy)} beläggning, konsulttimme ${nf(v.high_hour_consult)} kr (debitering), ${pct0(v.high_prod_onboard)} arbetsförmåga ombord.`),
+    infoTable(["", "Lågt", "Grund", "Högt"], [
+      { cells: ["Utresa, inställt", fmtKr(sc("out").low.cancelled), fmtKr(sc("out").base.cancelled), fmtKr(sc("out").high.cancelled)] },
+      { cells: ["Utresa, +60 min", fmtKr(sc("out").low.delay60), fmtKr(sc("out").base.delay60), fmtKr(sc("out").high.delay60)] },
+      { cells: ["Hemresa, inställt", fmtKr(sc("home").low.cancelled), fmtKr(sc("home").base.cancelled), fmtKr(sc("home").high.cancelled)] },
+      { cells: ["Hemresa, +60 min", fmtKr(sc("home").low.delay60), fmtKr(sc("home").base.delay60), fmtKr(sc("home").high.delay60)] },
+    ], [1, 2, 3]),
+
+    h("Dold kostnad: resor kvällen före"),
+    p(`När morgontåget är opålitligt åker en del till Stockholm kvällen före och bor på hotell för att säkert hinna till mötet. Tågkoll räknar med ${nf(v.hidden_per_day)} resenärer per avgång, ` +
+      `${kr(v.hidden_hotel)} i hotell och traktamente och ${unitText(v.hidden_evening, "h")} förlorad kväll: ${fmtKr(ex.out.hidden_per_journey)} per avgång. Beloppet är osäkert och visas därför separat, utanför summan.`),
+
+    h("Jämfört med andra beräkningar"),
+    p("En annan beräkning för samma tågpar landar betydligt högre: ungefär 2,1 miljoner kronor för ett inställt morgontåg och 1,3 miljoner för ett inställt kvällståg, med 300 resenärer. Skillnaden beror främst på:"),
+    el("ul", {},
+      el("li", { text: "Produktivitet ombord: den som sitter kvar på ett försenat tåg kan oftast arbeta. Bara väntan på perrong, buss och bil räknas med låg arbetsförmåga." }),
+      el("li", { text: "Alla som ska på möte missar inte: mötesförlusten vägs med marginal och sannolikhet, och en del deltar digitalt eller tar nästa tåg." }),
+      el("li", { text: "Förseningsfaktorn 3,5 används bara för fritid. Arbetstid är redan värderad till sitt fulla värde och räknas inte upp en gång till." }),
+      el("li", { text: "Den andra beräkningen antar i praktiken att alla resenärer förlorar en halv arbetsdag när morgontåget ställs in. Här tar många nästa tåg eller deltar digitalt." })),
+    p("Det höga scenariot använder den andra beräkningens antaganden om beläggning, konsulternas timvärde och arbetsförmåga ombord. Resten av skillnaden kommer av punkterna ovan."),
+
+    h("Det här räknas inte in"),
+    el("ul", {},
+      el("li", { text: "SJ:s förseningsersättning – den är en överföring mellan SJ och resenären, inte en kostnad för samhället. Hanteringen ingår i ersättningstrafiken." }),
+      el("li", { text: "Följdförseningar för andra tåg." }),
+      el("li", { text: "Dold kostnad för resor kvällen före – den visas separat." })),
+
+    el("p", { class: "sub", text: "Schablonerna kan ändras av administratören på adminsidan. Hela modellen beskrivs i docs/kostnadsmodell.md i Tågkolls källkod." }),
+  );
+  curveChart(curve, ex);
+}
+
+async function openCostInfo() {
+  const dlg = $("cost-info");
+  dlg.showModal();
+  try {
+    costModel = await api("/api/cost/model");
+    renderCostInfo(costModel);
+  } catch (e) {
+    $("cost-info-body").replaceChildren(el("p", { class: "sub", text: e.message }));
+  }
+}
+$("cost-info-open").addEventListener("click", openCostInfo);
+$("cost-info-close").addEventListener("click", () => $("cost-info").close());
+$("cost-info").addEventListener("click", (e) => { if (e.target === e.currentTarget) e.currentTarget.close(); });
+$("cost-info").addEventListener("close", hideTip);
 
 // ------------------------------------------------------------- datans ålder
 function fmtAge(days) {
@@ -923,6 +1239,7 @@ function renderCharts() {
   renderWeekly(d.weeks);
   renderWeekday(d.weekdays);
   renderStations(d.stations);
+  if (d.cost && d.cost.journeys) renderCostChart();
 }
 
 function render() {
@@ -946,6 +1263,7 @@ function render() {
       : "Trafikverket har inga uppgifter om det här tågnumret just nu. Kontrollera numret – bevakningen fortsätter och data dyker upp när tåget går.";
   }
   renderCharts();
+  renderCost();
   renderTable(d.journeys);
 }
 
@@ -1000,7 +1318,14 @@ $("periods").addEventListener("click", (e) => {
 });
 
 let resizeTimer;
-new ResizeObserver(() => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { renderCharts(); renderLine(); }, 120); }).observe(document.querySelector("main"));
+new ResizeObserver(() => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    renderCharts();
+    renderLine();
+    if (costModel && $("cost-info").open) curveChart(document.querySelector(".info-curve"), costModel.explain);
+  }, 120);
+}).observe(document.querySelector("main"));
 
 async function loadVisitors() {
   try {

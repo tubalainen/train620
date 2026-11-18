@@ -122,12 +122,49 @@
         </section>
       </div>
 
+      <section id="cost-card" class="card cost-card" hidden>
+        <div class="card-head">
+          <div>
+            <h3>Samhällskostnad</h3>
+            <p class="sub" id="cost-sub"></p>
+          </div>
+          <button id="cost-info-open" type="button" class="info-btn" aria-haspopup="dialog">
+            <span class="info-i" aria-hidden="true">i</span> Så räknar vi
+          </button>
+        </div>
+        <div class="cost-kpis">
+          <div class="tile hero">
+            <span class="label">Kostnad i perioden</span>
+            <span class="value" id="cost-total">–</span>
+            <span class="note" id="cost-range"></span>
+          </div>
+          <div class="tile"><span class="label">Per avgång i snitt</span><span class="value" id="cost-avg">–</span><span class="note" id="cost-avg-note"></span></div>
+          <div class="tile"><span class="label">Inställda avgångar</span><span class="value" id="cost-cancel">–</span><span class="note" id="cost-cancel-note"></span></div>
+          <div class="tile"><span class="label">Försenade avgångar</span><span class="value" id="cost-delay">–</span><span class="note" id="cost-delay-note"></span></div>
+          <div class="tile hidden-cost" id="cost-hidden-tile" hidden><span class="label">Dold kostnad (uppskattning)</span><span class="value" id="cost-hidden">–</span><span class="note" id="cost-hidden-note"></span></div>
+        </div>
+        <h4 class="cost-h" id="cost-period-title">Kostnad över tid</h4>
+        <div class="legend" id="cost-legend"></div>
+        <div id="cost-chart" class="chart"></div>
+        <div class="grid cost-grid">
+          <div>
+            <h4 class="cost-h">Uppdelning</h4>
+            <div id="cost-kinds"></div>
+          </div>
+          <div>
+            <h4 class="cost-h">Dyraste avgångarna</h4>
+            <div id="cost-top"></div>
+          </div>
+        </div>
+        <p class="sub cost-note" id="cost-note"></p>
+      </section>
+
       <section class="card">
         <h3>Avgångar</h3>
         <p class="sub">Klicka på en rad för att se alla stationer och visa avgången på linjen.</p>
         <div class="table-wrap">
           <table id="journeys">
-            <thead><tr><th>Datum</th><th>Status</th><th class="num">Planerad ankomst</th><th class="num">Verklig ankomst</th><th class="num">Försening</th><th>Avvikelser</th></tr></thead>
+            <thead><tr><th>Datum</th><th>Status</th><th class="num">Planerad ankomst</th><th class="num">Verklig ankomst</th><th class="num">Försening</th><th class="num cost-col">Kostnad</th><th>Avvikelser</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -151,6 +188,14 @@
       </ul>
     </section>
   </footer>
+
+  <dialog id="cost-info" class="info-dialog" aria-labelledby="cost-info-title">
+    <div class="dialog-head">
+      <h2 id="cost-info-title">Så räknar vi samhällskostnaden</h2>
+      <button id="cost-info-close" type="button" class="dialog-close" aria-label="Stäng">✕</button>
+    </div>
+    <div id="cost-info-body" class="dialog-body"><p class="sub">Hämtar …</p></div>
+  </dialog>
 
   <div id="tooltip" class="tooltip" hidden></div>
   <script src="app.js"></script>

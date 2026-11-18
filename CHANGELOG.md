@@ -2,6 +2,18 @@
 
 Varje release får ett avsnitt `## [x.y.z] - ÅÅÅÅ-MM-DD`. Avsnittet blir releasetexten på GitHub.
 
+## [2.6.0] - 2026-11-18
+
+- Nytt: **Samhällskostnad.** Ett nytt kort på dashboarden visar ungefär vad förseningarna och de inställda avgångarna har kostat samhället under vald period: summan med ett spann (lågt–högt scenario), kostnad per avgång i snitt, hur mycket som beror på inställda respektive försenade avgångar, kostnaden per vecka eller månad uppdelad på förlorad tid, missade möten, dagen efter och familj, hotellnätter, andra resor och ersättningstrafik, samt de dyraste avgångarna. Importerad historik räknas också.
+- Resenärerna räknas utifrån SJ 3000 med 240 platser och 85 % beläggning, uppdelade på konsulter (1 250 kr/h), offentlig sektor (650 kr/h) och övriga. Förseningstid på fritid värderas enligt Trafikverkets kalkylvärden (ASEK), 3,5 gånger restiden. Den som sitter kvar på ett försenat tåg antas kunna arbeta en stor del av tiden; den som väntar på perrong eller sitter i ersättningsbuss nästan inte.
+- Morgontåget till Stockholm räknas som en **utresa**: förlorad arbetstid och den förväntade kostnaden för möten, konferenser, utbildningar och övningar som resenärerna kommer sent till eller missar. En försening kostar bara för den som har mindre marginal till mötet än förseningen, och vid mer än 90 minuter vänder en del hem.
+- Kvällståget från Stockholm räknas som en **hemresa**: förlorad kväll, hotellnätter, hyrbil eller buss, familjelogistik och sämre arbetsförmåga förmiddagen efter en mycket sen hemkomst. Ställdes morgontåget in samma dag räknas inte de som aldrig åkte upp en gång till.
+- För morgontåget visas också en **dold kostnad**: resenärer som åker kvällen före och bor på hotell för säkerhets skull. Den är en uppskattning och ingår inte i summan.
+- Knappen **Så räknar vi** förklarar uträkningen med alla schabloner som gäller just nu, räkneexempel, en kurva över hur kostnaden växer med förseningen, scenarierna och en jämförelse med en annan beräkning för samma tågpar.
+- Tabellen över avgångar har en ny kolumn, **Kostnad**.
+- På adminsidan finns ett nytt avsnitt, **Kostnadsmodell**, där alla schabloner kan ändras: platser, beläggning, resenärsgrupper, timvärden, arbetsförmåga, andelar, sannolikheter, hotellpris, ersättningstrafik och scenarierna. Statistiken räknas om direkt, även bakåt i tiden, och allt går att återställa till standard. Ingen ändring i `.env` behövs.
+- Beloppen är förväntade värden som bygger på antaganden. En enskild avgång kan i verkligheten kosta mer eller mindre.
+
 ## [2.5.2] - 2026-11-17
 
 - Ångloket på linjen ryker bara när tåget rullar. När det står still – på en station, före avgång, framme vid slutstationen eller efter en inställning – kommer ingen rök ur skorstenen.
