@@ -3,7 +3,7 @@
 Överlämning mellan chattsessioner. Läs den här filen och `CLAUDE.md` först i en ny session,
 och uppdatera filen när något viktigt ändras (direkt till `main`, utan PR och release).
 
-*Senast uppdaterad: 2026-11-18, efter release v2.6.0.*
+*Senast uppdaterad: 2026-11-18, efter release v2.6.1.*
 
 ## Vad Tågkoll är
 
@@ -104,6 +104,15 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
 
 ## Releaser
 
+- **v2.6.1** (2026-11-18), släppt och kontrollerad (PR #28, Release #21, `docker pull` av `2.6.1` och
+  `latest` utan inloggning, samma image): inställt i förväg (≥ 8 h före avgång, via `canceled_known_at`
+  = minsta `modified_time` bland inställda rader) räknas 40 % (utresa) / 30 % (hemresa) av akut;
+  försening ≥ 30 min redan vid avgång får tak = akut inställt; 25 % deltar digitalt från tåget vid
+  ≥ 30 min; restidsvärde 115 kr/h (ASEK 85 kr/h 2017, uppräknat för hand – kalkylbilagan gick inte att
+  hämta). Utredning: ASEK 8.0 använder 3,5 × även för tjänsteresor (AR 9.12/9.21) och 15 %
+  produktivitet ombord (AR 9.9). **Användaren valde att behålla Tågkolls modell** (följder räknas var
+  för sig, 60 % arbete ombord, offentlig 650 kr/h inkl. omkostnader) i stället för renodlad ASEK, som
+  ger ungefär dubbelt så höga förseningskostnader för 620.
 - **v2.6.0** (2026-11-18), släppt och kontrollerad (PR #27, Release #20, `docker pull` av `2.6.0` och
   `latest` utan inloggning, samma image, `app/cost.py` finns i imagen): samhällskostnad. Användarens
   beslut: SJ 3000 (ca 240 platser, **inte X2000**), 85 % beläggning, konsulter 1 250 kr/h, grupper
