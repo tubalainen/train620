@@ -2,6 +2,19 @@
 
 Varje release får ett avsnitt `## [x.y.z] - ÅÅÅÅ-MM-DD`. Avsnittet blir releasetexten på GitHub.
 
+## [3.0.0] - 2026-11-18
+
+Ny utformning av hela dashboarden. Alla funktioner finns kvar, men de ligger på nya platser och sägs bara en gång. Ingen manuell åtgärd behövs vid uppgradering.
+
+- **Välj tåg överst** med en knapp per tåg, där sträckan står direkt.
+- **Nu-kortet** ersätter rutorna *I dag*, *Kommande avgångar* och linjekortet. Det visar en avgång i taget: status som rubrik, och avgång, ankomst, försening och samhällskostnad som siffror. Linjen och uppspelningen ligger under, och pilarna bläddrar mellan avgångarna. Kommande dagar visas som en rad med en markering per dag, och text bara för dagar med kända störningar.
+- **Historiken ligger i flikar:** *Översikt* (punktlighet, inställda, medelförsening, samhällskostnad och försening per avgång), *Punktlighet* (utfall, per vecka, per veckodag, per station), *Kostnad* och *Avgångar*. Periodvalet ligger på samma rad som flikarna, eftersom det bara gäller historiken. Vald flik sparas och kan länkas till (t.ex. `#cost`).
+- **Avgångar** kan visa bara störningar och sorteras på senaste, störst försening eller dyrast. Det ersätter listan *Dyraste avgångarna*.
+- *Översikt* sammanfattar perioden i en mening, till exempel hur ofta tåget kom i tid och vad störningarna kostat.
+- Ett inställt tåg sägs nu en gång. Skylten INSTÄLLT på linjen och *Var uppstod förseningen?* visas bara när det finns något att säga utöver statusen. Linjens förklaring har kortats från åtta till fyra poster.
+- Lugnare utseende: färre textstorlekar och ramar, mer luft. Kostnadsslagen har nya färger som inte förväxlas med statusfärgerna (orange = försenat, grönt = i tid).
+- Tekniska uppgifter om datans ålder har flyttat till sidfoten, och *Kakor och integritet* går att fälla ut där.
+
 ## [2.6.2] - 2026-11-18
 
 - Rutan *I dag* (eller *Senaste avgång*) visar vad förseningen eller det inställda tåget kostade samhället, till exempel "Inställningen kostade samhället ungefär 596 000 kr". Var inställningen känd i förväg står det också. En länk öppnar *Så räknar vi*.

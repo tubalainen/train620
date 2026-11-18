@@ -11,29 +11,65 @@
 <body>
   <header class="top">
     <div class="brand">
-      <svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 22V11a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v11M9 16h14M12 26l2-4m6 4-2-4" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
-      <div>
-        <h1>Tågkoll</h1>
-        <p>Förseningar och inställda tåg, dag för dag</p>
-      </div>
+      <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 22V11a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v11M9 16h14M12 26l2-4m6 4-2-4" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
+      <h1>Tågkoll</h1>
     </div>
     <div class="sync">
-      <span id="visitors" class="visitors" title="Unika besökare i dag, räknas anonymt utan kakor" hidden>
-        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><circle cx="8" cy="5" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M2.5 14.5c.6-3 2.8-4.5 5.5-4.5s4.9 1.5 5.5 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-        <span id="visitors-text"></span>
-      </span>
+      <span id="visitors" title="Unika besökare i dag, räknas anonymt utan kakor" hidden><span id="visitors-text"></span> ·</span>
       <span id="sync-text">Hämtar …</span>
     </div>
   </header>
 
   <main>
-    <section class="filters" aria-label="Urval">
-      <div class="filter-group">
-        <span class="filter-label">Tåg</span>
-        <div id="trains" class="chips" role="tablist" aria-label="Bevakade tåg"></div>
-      </div>
-      <div class="filter-group">
-        <span class="filter-label">Period</span>
+    <nav id="trains" class="trains" aria-label="Bevakade tåg"></nav>
+    <p id="message" class="message" role="status" hidden></p>
+
+    <div id="content" hidden>
+      <section id="now" class="now" aria-label="Avgången">
+        <div class="now-head">
+          <div class="now-title">
+            <span id="now-label" class="now-label"></span>
+            <div class="now-status">
+              <h2 id="now-status"></h2>
+              <span id="now-reason" class="now-reason"></span>
+            </div>
+          </div>
+          <div class="now-nav">
+            <button id="now-prev" type="button" class="icon-btn" aria-label="Föregående avgång">‹</button>
+            <select id="line-date" class="line-pick" aria-label="Välj avgång"></select>
+            <button id="now-next" type="button" class="icon-btn" aria-label="Nästa avgång">›</button>
+          </div>
+        </div>
+
+        <dl id="now-facts" class="facts"></dl>
+
+        <div id="line-card" class="line-area" hidden>
+          <div id="line" class="line-chart"></div>
+          <div class="legend line-legend" id="line-legend"></div>
+          <div class="now-actions">
+            <button id="line-play" type="button">▶ Spela upp resan</button>
+            <span id="line-clock" class="line-clock"></span>
+          </div>
+          <details id="delay-details" class="delay-details">
+            <summary><span class="summary-title">Var uppstod förseningen?</span> <span id="delay-summary" class="summary-text"></span></summary>
+            <div id="delay-body"></div>
+          </details>
+        </div>
+
+        <div id="upcoming" class="upcoming" hidden>
+          <span class="small-label">Kommande dagar</span>
+          <ol id="upcoming-days" class="upcoming-days"></ol>
+          <ul id="upcoming-notes" class="upcoming-notes"></ul>
+        </div>
+      </section>
+
+      <div class="tabbar">
+        <div id="tabs" class="tabs" role="tablist" aria-label="Historik">
+          <button type="button" role="tab" id="tab-overview" aria-controls="panel-overview" data-tab="overview">Översikt</button>
+          <button type="button" role="tab" id="tab-punct" aria-controls="panel-punct" data-tab="punct">Punktlighet</button>
+          <button type="button" role="tab" id="tab-cost" aria-controls="panel-cost" data-tab="cost">Kostnad</button>
+          <button type="button" role="tab" id="tab-table" aria-controls="panel-table" data-tab="table">Avgångar</button>
+        </div>
         <div id="periods" class="segmented" role="group" aria-label="Period">
           <button type="button" data-days="7">7 dagar</button>
           <button type="button" data-days="30">30 dagar</button>
@@ -41,153 +77,113 @@
           <button type="button" data-days="">Allt</button>
         </div>
       </div>
-    </section>
-    <p id="message" class="message" role="status" hidden></p>
-
-    <div id="content" hidden>
-      <section class="train-head">
-        <h2 id="train-title"></h2>
-        <p id="train-sub"></p>
-        <p id="train-age" class="age"></p>
-      </section>
-
-      <section id="today" class="today" hidden></section>
-      <section id="upcoming" class="today upcoming" hidden aria-live="polite"></section>
-
-      <section id="line-card" class="card line-card" hidden>
-        <div class="line-head">
-          <div>
-            <h3 id="line-title">Linjen</h3>
-            <p class="sub" id="line-sub"></p>
-            <p class="line-cost" id="line-cost" hidden></p>
-          </div>
-          <div class="line-actions">
-            <select id="line-date" class="line-pick" aria-label="Välj avgång att spela upp"></select>
-            <span id="line-clock" class="line-clock"></span>
-            <button id="line-play" type="button">▶ Spela upp resan</button>
-          </div>
-        </div>
-        <div id="line" class="line-chart"></div>
-        <div class="legend" id="line-legend"></div>
-        <details id="delay-details" class="delay-details">
-          <summary><span class="summary-title">Var uppstod förseningen?</span> <span id="delay-summary" class="summary-text"></span></summary>
-          <div id="delay-body"></div>
-        </details>
-      </section>
-
-      <section class="kpis" aria-label="Nyckeltal">
-        <div class="tile hero">
-          <span class="label">Punktlighet</span>
-          <span class="value" id="kpi-punct">–</span>
-          <span class="note" id="kpi-punct-note"></span>
-        </div>
-        <div class="tile"><span class="label">Avgångar</span><span class="value" id="kpi-count">–</span><span class="note" id="kpi-count-note"></span></div>
-        <div class="tile"><span class="label">Försenade</span><span class="value" id="kpi-delayed">–</span><span class="note" id="kpi-delayed-note"></span></div>
-        <div class="tile"><span class="label">Inställda</span><span class="value" id="kpi-cancelled">–</span><span class="note" id="kpi-cancelled-note"></span></div>
-        <div class="tile"><span class="label">Medelförsening</span><span class="value" id="kpi-avg">–</span><span class="note" id="kpi-avg-note"></span></div>
-      </section>
 
       <p id="empty" class="empty" hidden></p>
 
-      <div id="charts">
+      <section id="panel-overview" class="panel" role="tabpanel" aria-labelledby="tab-overview">
+        <div class="kpis">
+          <div class="tile"><span class="label">Punktlighet</span><span class="value" id="kpi-punct">–</span><span class="note" id="kpi-punct-note"></span></div>
+          <div class="tile"><span class="label">Inställda</span><span class="value" id="kpi-cancelled">–</span><span class="note" id="kpi-cancelled-note"></span></div>
+          <div class="tile"><span class="label">Medelförsening</span><span class="value" id="kpi-avg">–</span><span class="note" id="kpi-avg-note"></span></div>
+          <button type="button" class="tile tile-link" id="kpi-cost-tile"><span class="label">Samhällskostnad</span><span class="value" id="kpi-cost">–</span><span class="note" id="kpi-cost-note"></span></button>
+        </div>
+        <p id="overview-summary" class="summary"></p>
         <section class="card">
-          <h3>Utfall</h3>
-          <p class="sub" id="split-sub"></p>
+          <div class="card-head">
+            <h3>Försening per avgång</h3>
+            <p class="sub" id="daily-sub"></p>
+          </div>
+          <div id="daily" class="chart"></div>
+          <div class="legend" id="daily-legend"></div>
+        </section>
+      </section>
+
+      <section id="panel-punct" class="panel" role="tabpanel" aria-labelledby="tab-punct" hidden>
+        <section class="card">
+          <div class="card-head"><h3>Utfall</h3><p class="sub" id="split-sub"></p></div>
           <div id="split"></div>
         </section>
-
-        <section class="card">
-          <h3>Ankomstförsening per avgång</h3>
-          <p class="sub" id="daily-sub"></p>
-          <div class="legend" id="daily-legend"></div>
-          <div id="daily" class="chart"></div>
-        </section>
-
         <div class="grid">
           <section class="card">
-            <h3>Punktlighet per vecka</h3>
-            <p class="sub">Andel avgångar i tid, per kalendervecka</p>
+            <div class="card-head"><h3>Per vecka</h3><p class="sub">Andel avgångar i tid</p></div>
             <div id="weekly" class="chart"></div>
           </section>
           <section class="card">
-            <h3>Punktlighet per veckodag</h3>
-            <p class="sub">Andel avgångar i tid</p>
+            <div class="card-head"><h3>Per veckodag</h3><p class="sub">Andel avgångar i tid</p></div>
             <div id="weekday" class="chart"></div>
           </section>
         </div>
-
         <section class="card">
-          <h3>Medelförsening per station</h3>
-          <p class="sub">Minuter efter tidtabell, i tågets färdriktning. Ankomsttid används där den finns.</p>
+          <div class="card-head"><h3>Medelförsening per station</h3><p class="sub">Minuter efter tidtabell, i tågets färdriktning</p></div>
           <div id="stations"></div>
         </section>
-      </div>
-
-      <section id="cost-card" class="card cost-card" hidden>
-        <div class="card-head">
-          <div>
-            <h3>Samhällskostnad</h3>
-            <p class="sub" id="cost-sub"></p>
-          </div>
-          <button id="cost-info-open" type="button" class="info-btn" aria-haspopup="dialog">
-            <span class="info-i" aria-hidden="true">i</span> Så räknar vi
-          </button>
-        </div>
-        <div class="cost-kpis">
-          <div class="tile hero">
-            <span class="label">Kostnad i perioden</span>
-            <span class="value" id="cost-total">–</span>
-            <span class="note" id="cost-range"></span>
-          </div>
-          <div class="tile"><span class="label">Per avgång i snitt</span><span class="value" id="cost-avg">–</span><span class="note" id="cost-avg-note"></span></div>
-          <div class="tile"><span class="label">Inställda avgångar</span><span class="value" id="cost-cancel">–</span><span class="note" id="cost-cancel-note"></span></div>
-          <div class="tile"><span class="label">Försenade avgångar</span><span class="value" id="cost-delay">–</span><span class="note" id="cost-delay-note"></span></div>
-          <div class="tile hidden-cost" id="cost-hidden-tile" hidden><span class="label">Dold kostnad (uppskattning)</span><span class="value" id="cost-hidden">–</span><span class="note" id="cost-hidden-note"></span></div>
-        </div>
-        <h4 class="cost-h" id="cost-period-title">Kostnad över tid</h4>
-        <div class="legend" id="cost-legend"></div>
-        <div id="cost-chart" class="chart"></div>
-        <div class="grid cost-grid">
-          <div>
-            <h4 class="cost-h">Uppdelning</h4>
-            <div id="cost-kinds"></div>
-          </div>
-          <div>
-            <h4 class="cost-h">Dyraste avgångarna</h4>
-            <div id="cost-top"></div>
-          </div>
-        </div>
-        <p class="sub cost-note" id="cost-note"></p>
       </section>
 
-      <section class="card">
-        <h3>Avgångar</h3>
-        <p class="sub">Klicka på en rad för att se alla stationer och visa avgången på linjen.</p>
-        <div class="table-wrap">
-          <table id="journeys">
-            <thead><tr><th>Datum</th><th>Status</th><th class="num">Planerad ankomst</th><th class="num">Verklig ankomst</th><th class="num">Försening</th><th class="num cost-col">Kostnad</th><th>Avvikelser</th></tr></thead>
-            <tbody></tbody>
-          </table>
+      <section id="panel-cost" class="panel" role="tabpanel" aria-labelledby="tab-cost" hidden>
+        <div class="panel-intro">
+          <p class="summary" id="cost-sub"></p>
+          <button id="cost-info-open" type="button" class="info-btn" aria-haspopup="dialog"><span class="info-i" aria-hidden="true">i</span> Så räknar vi</button>
+        </div>
+        <p id="cost-none" class="empty" hidden></p>
+        <div id="cost-body">
+          <div class="kpis kpis-3">
+            <div class="tile"><span class="label">Kostnad i perioden</span><span class="value" id="cost-total">–</span><span class="note" id="cost-range"></span></div>
+            <div class="tile"><span class="label">Per avgång i snitt</span><span class="value" id="cost-avg">–</span><span class="note" id="cost-avg-note"></span></div>
+            <div class="tile tile-dashed" id="cost-hidden-tile" hidden><span class="label">Dold kostnad (uppskattning)</span><span class="value" id="cost-hidden">–</span><span class="note" id="cost-hidden-note"></span></div>
+          </div>
+          <p class="summary" id="cost-split"></p>
+          <section class="card">
+            <div class="card-head"><h3 id="cost-period-title">Kostnad över tid</h3></div>
+            <div class="legend" id="cost-legend"></div>
+            <div id="cost-chart" class="chart"></div>
+          </section>
+          <section class="card">
+            <div class="card-head"><h3>Uppdelning</h3></div>
+            <div id="cost-kinds"></div>
+          </section>
+          <p class="sub cost-note" id="cost-note"></p>
+        </div>
+      </section>
+
+      <section id="panel-table" class="panel" role="tabpanel" aria-labelledby="tab-table" hidden>
+        <div class="table-tools">
+          <div class="chips" role="group" aria-label="Urval">
+            <button type="button" class="chip-btn" data-filter="all">Alla avgångar</button>
+            <button type="button" class="chip-btn" data-filter="issues">Bara störningar</button>
+          </div>
+          <div class="sorts" role="group" aria-label="Sortering">
+            <button type="button" data-sort="date">Senaste först</button>
+            <button type="button" data-sort="delay">Störst försening</button>
+            <button type="button" data-sort="cost">Dyrast</button>
+          </div>
+        </div>
+        <div class="card table-card">
+          <div class="table-wrap">
+            <table id="journeys">
+              <thead><tr><th>Datum</th><th>Status</th><th class="num">Ankomst</th><th class="num">Försening</th><th class="num">Kostnad</th><th class="dev">Avvikelser</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
         </div>
         <button id="more" type="button" class="more" hidden></button>
       </section>
-
     </div>
   </main>
 
   <footer>
+    <p id="about"></p>
     <p id="foot"></p>
     <p>Källa: Trafikverkets öppna API (TrainAnnouncement). Trafikverket sparar bara några dagar bakåt, så statistiken växer från den dag ett tåg börjar bevakas.</p>
-    <section class="privacy" aria-labelledby="privacy-title">
-      <h2 id="privacy-title">Kakor och integritet</h2>
+    <details class="privacy">
+      <summary>Kakor och integritet</summary>
       <ul>
         <li>Tågkoll sätter inga kakor för besökare och använder ingen spårning, inga annonser och inga analystjänster från tredje part.</li>
-        <li>Valt tåg och period sparas bara i din egen webbläsare (localStorage) och skickas aldrig till servern.</li>
+        <li>Valt tåg, period och flik sparas bara i din egen webbläsare (localStorage) och skickas aldrig till servern.</li>
         <li>Besökare räknas anonymt: en engångskod av IP-adress och webbläsare, blandad med ett slumpvärde som byts varje natt. IP-adressen sparas aldrig, och koderna raderas när dygnet är slut. Det går inte att se vem som har besökt sidan eller känna igen någon mellan dagar.</li>
         <li>Adminsidan sätter en nödvändig inloggningskaka, och bara för den som loggar in där.</li>
         <li>Sidan förmedlas via Cloudflare, som kan sätta egna tekniska kakor (t.ex. mot robotar) och föra trafikstatistik enligt sina egna villkor.</li>
       </ul>
-    </section>
+    </details>
   </footer>
 
   <dialog id="cost-info" class="info-dialog" aria-labelledby="cost-info-title">
