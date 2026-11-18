@@ -797,14 +797,18 @@ def cost_stats(ident: str, journeys: list[dict], since: str | None, profile: str
     if not profile:
         return None
     p = load_cost_params()
+    low, high = cost.scenario(p, "low"), cost.scenario(p, "high")
     morning = morning_statuses(ident, since) if profile == "home" else {}
-    rows = []
+    rows, low_total, high_total = [], 0, 0
     for j in journeys:
         stayed = cost.stayed_home_share(p, morning.get(j["date"])) if profile == "home" else 0.0
         c = cost.journey_cost(p, profile, j["status"], j["delay"], stayed)
         if c:
-            rows.append({"date": j["date"], "status": j["status"], "delay": j["delay"], **c,
-                         "paired": stayed > 0})
+            rows.append({"date": j["date"], "status": j["status"], "delay": j["delay"], **c, "paired": stayed > 0})
+            low_total += cost.journey_cost(low, profile, j["status"], j["delay"],
+                                           cost.stayed_home_share(low, morning.get(j["date"])) if stayed else 0.0)["total"]
+            high_total += cost.journey_cost(high, profile, j["status"], j["delay"],
+                                            cost.stayed_home_share(high, morning.get(j["date"])) if stayed else 0.0)["total"]
     total = sum(r["total"] for r in rows)
     kinds = {k: sum(r["kinds"][k] for r in rows) for k in cost.KINDS}
     by_status = {s: sum(r["total"] for r in rows if r["status"] == s) for s in FINISHED}
@@ -824,13 +828,15 @@ def cost_stats(ident: str, journeys: list[dict], since: str | None, profile: str
         b["journeys"] += 1
         for k in cost.KINDS:
             b["kinds"][k] += r["kinds"][k]
+    hidden = round(cost.hidden_cost(p) * len(rows)) if profile == "out" else None
     return {
         "profile": profile,
         "total": total,
-        "low": round(total * p["range_low"] / 100),
-        "high": round(total * p["range_high"] / 100),
+        "low": low_total,
+        "high": high_total,
         "journeys": len(rows),
         "per_journey": round(total / len(rows)) if rows else None,
+        "passengers": round(cost.passengers(p)),
         "kinds": kinds,
         "kind_labels": cost.KINDS,
         "by_status": by_status,
@@ -839,6 +845,8 @@ def cost_stats(ident: str, journeys: list[dict], since: str | None, profile: str
         "top": sorted((r for r in rows if r["total"] > 0), key=lambda r: r["total"], reverse=True)[:5],
         "by_date": {r["date"]: r["total"] for r in rows},
         "paired_days": sum(r["paired"] for r in rows),
+        "hidden": hidden,
+        "hidden_per_day": p["hidden_per_day"],
     }
 
 

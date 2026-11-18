@@ -51,9 +51,13 @@ inte anger kilometer.
 
 Kortet *Samhällskostnad* visar en ungefärlig kostnad för samhället av förseningar och inställda
 avgångar: summa och spann för vald period, uppdelning per slag (förlorad tid, missade möten,
-hotellnätter, andra resor), kostnad per vecka eller månad och de dyraste avgångarna. Tabellen
-över avgångar har en kolumn med kostnaden per avgång.
+dagen efter och familj, hotellnätter, andra resor, ersättningstrafik), kostnad per vecka eller
+månad och de dyraste avgångarna. Tabellen
+över avgångar har en kolumn med kostnaden per avgång. För morgontåget visas också en dold kostnad
+(resor kvällen före) separat från summan.
 
+- Resenärerna räknas utifrån antal platser och beläggning, uppdelade på konsulter, offentlig
+  sektor och övriga med egna timvärden.
 - Tåg till Stockholm räknas som utresa (möten, konferenser och övningar står på spel), tåg från
   Stockholm som hemresa (hotellnätter, alternativa resor, arbetstid dagen efter).
 - Beloppen är förväntade värden som bygger på schabloner. Knappen *Så räknar vi* förklarar

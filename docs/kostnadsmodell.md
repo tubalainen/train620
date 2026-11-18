@@ -1,74 +1,74 @@
 # Kostnadsmodell – vad kostar ett försenat eller inställt tåg samhället?
 
 Tågkoll räknar ut en ungefärlig **samhällskostnad** för varje avgång som har bevakats. Det här
-dokumentet beskriver modellen, schablonerna och hur siffrorna ska läsas. Koden finns i
-`app/cost.py`, och schablonerna kan ändras på `/admin` under *Kostnadsmodell*.
+dokumentet beskriver modellen, schablonerna, hur siffrorna ska läsas och hur modellen förhåller
+sig till en annan beräkning för samma tågpar. Koden finns i `app/cost.py`, och alla schabloner kan
+ändras på `/admin` under *Kostnadsmodell*.
 
 > Siffrorna är **förväntade värden** som bygger på schabloner. En enskild avgång kan i
 > verkligheten kosta mer eller mindre. Över många avgångar ger genomsnittet ändå en rimlig bild av
-> storleksordningen. Därför visas alltid ett spann (låg–hög) bredvid grundberäkningen.
+> storleksordningen. Därför visas alltid ett spann (lågt–högt scenario) bredvid grundberäkningen.
 
-## 1. Två riktningar, två slags kostnader
+## 1. Resenärerna
 
-| | Utresa till Stockholm (t.ex. 620 på morgonen) | Hemresa från Stockholm (t.ex. 643 på kvällen) |
+**Antal:** 240 platser (SJ 3000 / X55) × 85 % beläggning = **204 resenärer** per avgång. Går tåget
+med två sätt ändras antalet platser på adminsidan.
+
+| Grupp | Andel | Värde per timme |
 |---|---|---|
-| Vad står på spel | Det man skulle göra i Stockholm: möten, konferenser, utbildningar, övningar | Kvällen, natten och morgonen efter |
-| Var kostnaden tar ett hopp | När förseningen blir större än marginalen till mötet | När det inte går att komma hem samma kväll, så att det blir hotell |
-| Vems tid går förlorad | Resenärens arbetstid och **andras** tid i mötet | Främst resenärens egen tid |
+| Konsulter och näringsliv | 40 % | 1 250 kr/h i arbetstid |
+| Offentlig sektor (myndigheter, region, kommun, försvar) | 40 % | 650 kr/h i arbetstid (lön, arbetsgivaravgifter, omkostnader) |
+| Övriga (pendlare, studenter, privatresor) | 20 % | 455 kr/h förseningstid |
 
-Riktningen bestäms av tågets start- och slutstation: slutar tåget i Stockholm är det en utresa,
-börjar det i Stockholm är det en hemresa. Tåg som inte går till eller från Stockholm får ingen
-kostnadsberäkning.
+Konsulter och offentliganställda kallas nedan **tjänsteresenärer**. Deras snittvärde är 950 kr/h.
 
-## 2. Grundformel
+**Fritid och förseningstid.** Trafikverkets kalkylvärden (ASEK) värderar förseningstid till
+**3,5 gånger** normal restid. Med ett restidsvärde på 130 kr/h blir förseningstiden 455 kr/h. Det
+värdet används för övriga resenärer och för **allas** tid på kvällen, eftersom hemresan sker efter
+arbetstid. Faktorn används inte på arbetstid, som redan är värderad till sitt fulla värde.
 
-För varje avgång:
+**Arbete under resan.** Ombord på ett försenat tåg antas tjänsteresenärerna kunna arbeta **60 %**
+av tiden. På perrongen, i ersättningsbuss, på ett överfullt tåg eller bakom ratten **15 %**.
 
-```
-kostnad = antal drabbade resenärer × kostnad per resenär
-```
+**Små förseningar.** Upp till **5 minuter** räknas inte; de ryms i normal marginal.
+**Delvis inställda** avgångar räknas som **75 %** av ett helt inställt tåg.
 
-Kostnaden per resenär beror på vad som hände (i tid, försenat, delvis inställt, inställt) och
-delas upp i fyra slag:
+## 2. Kostnadsslag
 
 | Slag | Innehåll |
 |---|---|
 | Förlorad tid | Förlorad arbetstid och förseningstid på fritid |
-| Missade möten | Möten, konferenser, utbildningar och övningar som resenärer kommer sent till eller missar (bara utresa) |
-| Hotellnätter | Hotell, mat och traktamente (bara hemresa) |
+| Missade möten | Möten, konferenser, utbildningar och övningar som resenärer kommer sent till eller missar (utresa) |
+| Dagen efter och familj | Sämre arbetsförmåga förmiddagen efter en mycket sen hemkomst, och hämtning/barnomsorg som måste lösas (hemresa) |
+| Hotellnätter | Hotell, traktamente och ombokning (hemresa) |
 | Andra resor | Bil, hyrbil, buss, taxi |
+| Ersättningstrafik | Bussar, taxi, personal och hantering vid inställd avgång: 50 000 kr |
 
-Förseningar upp till **5 minuter** räknas inte; de antas rymmas i normal marginal.
-**Delvis inställda** avgångar räknas som **75 %** av ett helt inställt tåg, eftersom bara
-resenärerna efter platsen där tåget stannade drabbas fullt och det ofta finns ersättningsbuss.
-
-## 3. Utresa till Stockholm
+## 3. Utresa till Stockholm (morgontåget, 620)
 
 ### 3.1 Förväntad mötesförlust
 
-Kärnan är den förväntade kostnaden när en resenär **inte kommer fram alls**. Den räknas som ett
-viktat medelvärde över vad resenärerna ska göra i Stockholm:
+Kostnaden när en tjänsteresenär **inte kommer fram alls**, vägd över vad resenärerna ska göra:
 
 ```
-mötesförlust = Σ andel(ändamål) × sannolikhet(att frånvaron får betydelse) × kostnad(när den får det)
+mötesförlust = Σ andel × sannolikhet att frånvaron får betydelse × kostnad när den får det
 ```
 
 | Ändamål | Andel | Sannolikhet | Kostnad när den får betydelse | Förväntat |
 |---|---|---|---|---|
-| Konsult eller dagpendlare utan fast mötestid | 30 % | 10 % | 5 000 kr (kundmöte flyttas) | 500 kr |
+| Kunduppdrag eller arbete på plats utan fast mötestid | 30 % | 15 % | 8 000 kr | 1 200 kr |
 | Internt arbetsmöte | 30 % | 20 % | 6 000 kr (6 personer × 2 h) | 1 200 kr |
-| Externt möte eller samverkan mellan myndigheter | 20 % | 35 % | 15 000 kr (8 personer × 3 h, andras resor) | 5 250 kr |
-| Konferens eller utbildning | 15 % | 70 % | 6 000 kr (avgift, bokningar, innehåll) | 4 200 kr |
+| Externt möte, förhandling eller samverkan | 20 % | 35 % | 15 000 kr (motparter väntar, 8 personer × 3 h) | 5 250 kr |
+| Konferens eller utbildning | 15 % | 70 % | 6 000 kr | 4 200 kr |
 | Övning eller större samordnad aktivitet | 5 % | 40 % | 40 000 kr (20 personer × 4 h) | 16 000 kr |
-| **Viktat** | | | | **≈ 2 990 kr** |
+| **Viktat** | | | | **≈ 3 200 kr** |
 
-Sannolikheten fångar att det **inte alltid** kostar stora pengar när någon uteblir: många möten
-kan genomföras ändå, flyttas utan större skada eller hållas digitalt.
+Sannolikheten fångar att det **inte alltid** kostar stora pengar när någon uteblir.
 
-### 3.2 Försenat tåg: marginal och effekt
+### 3.2 Försenat tåg
 
-En försening kostar bara för den som har **mindre marginal** mellan ankomst och mötets början än
-förseningen. Fördelningen av marginalen:
+En försening kostar mötesförlust bara för den som har **mindre marginal** mellan ankomst och
+mötets början än förseningen:
 
 | Marginal | Andel |
 |---|---|
@@ -77,134 +77,164 @@ förseningen. Fördelningen av marginalen:
 | 45–90 min | 20 % |
 | Mer än 90 min eller flexibel tid | 20 % (räknas som 90–180 min) |
 
-Inom varje intervall antas resenärerna vara jämnt fördelade. Vid 30 minuters försening drabbas
-alltså hela första gruppen och halva den andra.
+Den som kommer för sent förlorar **15 %** av mötesförlusten vid under 30 minuter, **40 %** vid
+30–90 minuter och **60 %** vid mer än 90 minuter.
 
-Den som drabbas förlorar en del av mötesförlusten, beroende på hur sen hen blir:
-
-| Försening | Andel av mötesförlusten |
-|---|---|
-| Under 30 min (missar början) | 15 % |
-| 30–90 min | 40 % |
-| Mer än 90 min | 60 % |
-
-Till det kommer förlorad arbetstid: förseningen × **500 kr/h** (arbetsgivarens kostnad), minus
-**30 %** som antas bli arbetstid ombord.
+**Vända hem.** Vid mer än **90 minuters** försening vänder **25 %** av tjänsteresenärerna hem:
+de förlorar **3 timmar** arbetstid (netto) och hela mötesförlusten.
 
 ```
-kostnad per resenär = försening(h) × 500 × (1 − 0,30)
-                    + andel med för liten marginal × effekt × mötesförlust
+per tjänsteresenär = försening × 950 kr/h × (1 − 60 %) + andel med för liten marginal × effekt × 3 200 kr
+per övrig resenär  = försening × 455 kr/h
 ```
 
-Räkneexempel med 180 resenärer:
-
-| Försening | Tid | Möten | Summa |
+| Försening | Tid | Möten | Summa (204 resenärer) |
 |---|---|---|---|
-| +10 min | ca 10 500 kr | ca 13 500 kr | **≈ 24 000 kr** |
-| +25 min | ca 26 000 kr | ca 30 000 kr | **≈ 56 000 kr** |
-| +60 min | ca 63 000 kr | ca 144 000 kr | **≈ 207 000 kr** |
-| +120 min | ca 126 000 kr | ca 280 000 kr | **≈ 406 000 kr** |
+| +10 min | 13 000 kr | 13 000 kr | **≈ 26 000 kr** |
+| +30 min | 40 000 kr | 89 000 kr | **≈ 129 000 kr** |
+| +60 min | 81 000 kr | 139 000 kr | **≈ 220 000 kr** |
+| +120 min | 246 000 kr | 334 000 kr | **≈ 581 000 kr** |
 
-Kostnaden växer alltså **inte i proportion till minuterna**. Den tar ett hopp när marginalerna tar
-slut, ungefär mellan 30 och 60 minuter.
+Kostnaden växer **inte i proportion till minuterna**. Den tar hopp när marginalerna tar slut och
+när en del vänder hem.
 
 ### 3.3 Inställt tåg
 
-| Vad resenären gör | Andel | Tid och direkta kostnader | Mötesförlust | Per person |
-|---|---|---|---|---|
-| Tar nästa tåg (2 h senare) | 45 % | 2 h × 500 × 0,7 = 700 kr | 60 % | ≈ 2 490 kr |
-| Tar bilen | 15 % | 1 150 kr (bil, tid, utsläpp, olycksrisk) | 40 % | ≈ 2 350 kr |
-| Deltar digitalt | 25 % | 250 kr (omplanering) | 20 % | ≈ 850 kr |
-| Ställer in resan | 15 % | 2 h × 500 = 1 000 kr | 100 % | ≈ 3 990 kr |
-| **Viktat** | | | | **≈ 2 280 kr** |
+| Vad tjänsteresenären gör | Andel | Antagande |
+|---|---|---|
+| Tar nästa tåg | 45 % | 2 h senare med 15 % arbetsförmåga, 60 % av mötesförlusten |
+| Tar bilen | 15 % | 1 150 kr och 1 h utan arbete, 40 % av mötesförlusten |
+| Deltar digitalt | 25 % | 0,5 h omplanering, 20 % av mötesförlusten |
+| Ställer in resan | 15 % | 2 h förlorad arbetstid, hela mötesförlusten |
 
-Med 180 resenärer blir det **≈ 410 000 kr per inställt morgontåg**.
+Övriga resenärer tar nästa tåg (2 h förseningstid). Med ersättningstrafik blir det
+**≈ 600 000 kr per inställt morgontåg**.
 
-### 3.4 Dold kostnad som inte räknas
-
-När morgontåget är opålitligt anpassar sig resenärerna i förväg: de tar ett tidigare tåg, åker
-kvällen före och bor på hotell, eller tackar nej till möten i Stockholm. Det kostar även de dagar
-då tåget går i tid. Den kostnaden är svår att belägga och **ingår inte** i Tågkolls siffror.
-
-## 4. Hemresa från Stockholm
+## 4. Hemresa från Stockholm (kvällståget, 643)
 
 ### 4.1 Försenat tåg
 
 ```
-kostnad per resenär = försening(h) × 450 kr/h
+per resenär = försening × 455 kr/h
 ```
 
-450 kr/h är värdet av en förseningstimme på fritid. Trafikverkets kalkylvärden (ASEK) värderar
-förseningstid ungefär 3,5 gånger högre än vanlig restid. En timmes försening för 180 resenärer
-kostar alltså ≈ 81 000 kr.
+Kommer man hem mer än **120 minuter** för sent förlorar tjänsteresenärerna **1 timme** arbetstid
+förmiddagen efter (ungefär 25 % sämre arbetsförmåga under en förmiddag), och **25 %** måste lösa
+hämtning eller barnomsorg för **800 kr**. Effekten växer gradvis under timmen före gränsen, så att
+kostnaden inte hoppar på en enda minut.
+
+| Försening | Summa (204 resenärer) |
+|---|---|
+| +30 min | ≈ 46 000 kr |
+| +60 min | ≈ 93 000 kr |
+| +120 min | ≈ 381 000 kr |
 
 ### 4.2 Inställt tåg
 
-| Vad resenären gör | Andel | Kostnad per person |
+| Vad resenären gör | Andel | Antagande |
 |---|---|---|
-| Väntar på nästa tåg (2,5 h senare) | 50 % | 2,5 h × 450 = 1 125 kr |
-| Hotellnatt | 20 % | 2 100 kr (hotell, mat) + 4 h kväll × 450 + 3 h arbete dagen efter × 500 = 5 400 kr |
-| Hyrbil eller buss (3 h senare) | 20 % | 3 h × 450 + 550 kr = 1 900 kr |
+| Väntar på nästa tåg | 50 % | 2,5 h senare |
+| Hotellnatt | 20 % | 2 800 kr, 4 h förlorad kväll, 3 h arbetstid dagen efter |
+| Hyrbil eller buss | 20 % | 3 h senare, 550 kr |
 | Annat (taxi, skjuts, sitter fast) | 10 % | 1 500 kr |
-| **Viktat** | | **≈ 2 170 kr** |
 
-Med 180 resenärer blir det **≈ 390 000 kr per inställt kvällståg**.
+Alla som inte bor på hotell räknas också med förmiddagen efter och familjelogistik. Med
+ersättningstrafik blir det **≈ 713 000 kr per inställt kvällståg**.
 
 ### 4.3 Kopplingen till morgontåget
 
-Den som inte kom iväg på morgonen åker inte hem på kvällen. Om ett bevakat tåg till Stockholm
-ställdes in samma dag minskas antalet hemresenärer:
+Den som inte kom iväg på morgonen åker inte hem på kvällen. Ställdes ett bevakat tåg till
+Stockholm in samma dag antas 60 % av hemresenärerna ha åkt upp med det. De tjänsteresenärer som då
+deltog digitalt eller ställde in resan (40 % av tjänsteresenärerna) räknas inte igen på hemresan:
 
 ```
-andel som aldrig åkte upp = 60 % (åkte upp med morgontåget)
-                          × (25 % digitalt + 15 % ställde in resan) = 24 %
+andel som aldrig åkte upp = 60 % × 80 % tjänsteresenärer × 40 % = 19 %
 ```
 
-Var morgontåget delvis inställt räknas 75 % av det. Var det bara försenat påverkas inte
-hemresan. Har båda tågen problem samma dag räknas båda, eftersom resenärerna då har drabbats
-två gånger.
+Var morgontåget delvis inställt räknas 75 % av det. Var det bara försenat påverkas inte hemresan.
 
-## 5. Osäkerhet
+## 5. Spannet: lågt och högt scenario
 
-Det största osäkra värdet är **antalet resenärer**: SJ publicerar inte beläggning per avgång, och
-den finns inte i Trafikverkets API. Därför visas ett spann:
+Spannet räknas om med andra schabloner för det som är mest osäkert:
 
-- **Låg:** 50 % av grundberäkningen.
-- **Hög:** 160 % av grundberäkningen.
+| | Lågt | Grund | Högt |
+|---|---|---|---|
+| Beläggning | 70 % | 85 % | 100 % |
+| Konsulternas timvärde | 900 kr/h (arbetskostnad) | 1 250 kr/h | 1 350 kr/h (debitering) |
+| Arbetsförmåga ombord under försening | 70 % | 60 % | 15 % |
+| **Inställt morgontåg** | 471 000 kr | 600 000 kr | 710 000 kr |
+| **+60 min morgontåg** | 161 000 kr | 220 000 kr | 349 000 kr |
+| **Inställt kvällståg** | 563 000 kr | 713 000 kr | 843 000 kr |
 
-Spannet är en grov markering, inte ett statistiskt konfidensintervall.
+## 6. Dold kostnad: resor kvällen före
 
-## 6. Vad som inte räknas in
+När morgontåget är opålitligt åker en del till Stockholm kvällen före och bor på hotell för att
+säkert hinna till mötet. Tågkoll räknar med **10 resenärer per avgång**, 2 800 kr i hotell och
+traktamente och 4 timmar förlorad kväll: **≈ 46 000 kr per avgång**. Beloppet är svårt att belägga
+och visas därför i en egen ruta, **utanför** summan.
 
+## 7. Jämförelse med en annan beräkning
+
+En annan samhällsekonomisk kalkyl för samma tågpar (300 resenärer, konsulter 45 % à 1 350 kr/h,
+offentlig sektor 35 % à 650 kr/h, övriga 20 % à 220 kr/h) jämfördes med Tågkolls första modell.
+Den nuvarande modellen tar in det som var bättre i den andra kalkylen och behåller det som var
+bättre i Tågkolls.
+
+| Per avgång | Tågkoll, första versionen (180 resenärer) | Andra kalkylen (300 resenärer) | **Tågkoll nu (204 resenärer)** |
+|---|---|---|---|
+| Morgontåget +60 min | 207 000 kr | 400 000 kr | **220 000 kr** |
+| Morgontåget +120 min | 406 000 kr | 965 000 kr | **581 000 kr** |
+| Inställt morgontåg | 411 000 kr | 2 110 000 kr | **600 000 kr** |
+| Inställt kvällståg | 391 000 kr | 1 310 000 kr | **713 000 kr** |
+
+**Från den andra kalkylen** har Tågkoll tagit: resenärsgrupper med egna timvärden, fler resenärer,
+skillnaden mellan arbete ombord och utanför tåget, att en del vänder hem vid stor försening,
+förmiddagen efter och familjelogistik efter sen hemkomst, högre hotellkostnad, ersättningstrafik och
+den dolda kostnaden för resor kvällen före.
+
+**Det som inte har tagits över:**
+
+- **Försening ombord räknas inte som väntan på perrongen.** Den andra kalkylen räknar med 15 %
+  arbetsförmåga även när man sitter kvar på sin plats. Det gör produktionsbortfallet vid en timmes
+  försening ungefär tre gånger så stort.
+- **Förseningsfaktorn läggs inte på arbetstid.** ASEK:s faktor 3,5 gäller resenärens egen tid.
+  Arbetstid som redan är värderad till arbetsgivarens kostnad räknas inte upp en gång till.
+- **Alla som ska på möte missar inte.** Mötesförlusten vägs med marginal och sannolikhet.
+- **Inte alla förlorar en halv arbetsdag.** Den andra kalkylens 1,15 miljoner kronor i
+  produktionsbortfall för ett inställt morgontåg motsvarar att alla 300 förlorar drygt 4 timmar
+  till fullt värde. Här tar många nästa tåg eller deltar digitalt.
 - **SJ:s förseningsersättning** är en överföring mellan SJ och resenären, inte en kostnad för
-  samhället. Den ingår inte.
-- **Konsulternas uteblivna debitering** är företagets förlust. För samhället räknas den
-  förlorade produktionen, värderad till arbetskostnad.
-- **Dold anpassning** (se 3.4).
-- **Följdförseningar** för andra tåg på samma bana.
+  samhället. Bara hanteringen ingår, i ersättningstrafiken.
+- **Årskostnaden** räknas från de verkliga utfallen som Tågkoll har samlat in, inte från antagna
+  frekvenser.
 
-## 7. Schabloner och källor
+Det höga scenariot använder den andra kalkylens antaganden om beläggning, konsulternas timvärde och
+arbetsförmåga ombord. Resten av skillnaden kommer av punkterna ovan.
 
-Alla schabloner finns på adminsidan med inbyggt värde, nuvarande värde och förklaring. De
-viktigaste:
+## 8. Vad som inte räknas in
 
-| Schablon | Värde | Grund |
-|---|---|---|
-| Arbetsgivarens kostnad per arbetstimme | 500 kr/h | Månadslön ca 45 000 kr med sociala avgifter och omkostnader, ca 160 h/mån |
-| Värde per förseningstimme på fritid | 450 kr/h | ASEK: förseningstid värderas ca 3,5 × restid för långväga tåg |
-| Resenärer per avgång | 180 | Antagande: ca 300 platser, ca 75 % beläggning, ca 80 % till eller från Karlstad med omnejd |
-| Hotellnatt med mat | 2 100 kr | Hotell i Stockholm 1 500–2 000 kr plus middag och frukost |
-| Övriga andelar och sannolikheter | se ovan | Antaganden, ska kalibreras |
+- SJ:s förseningsersättning (se ovan).
+- Följdförseningar för andra tåg på samma bana.
+- Den dolda kostnaden räknas, men visas separat.
 
-**Att göra:** kontrollera tidsvärdena mot den senaste versionen av Trafikverkets ASEK och
-kalibrera andelarna, helst med en enkät bland resenärerna (ändamål, marginal, vad de gjorde vid
-senaste inställningen).
+## 9. Källor och osäkerheter
 
-## 8. Var siffrorna syns i Tågkoll
+- **ASEK:** förseningstid värderas till 3,5 × normal restid för personbilar och kollektiva
+  färdmedel, och tjänsteresor värderas efter arbetsgivarens kostnad (bruttolön plus sociala
+  avgifter). Se riksdagens utvärdering *Samhällsekonomiska analyser för planering av väg- och
+  järnvägsinvesteringar* (2025/26:RFR21).
+- **Restidsvärdet 130 kr/h** för privata långväga resor är ett antagande. Kontrollera mot ASEK:s
+  kalkylbilaga.
+- **SJ 3000 (X55):** ca 240 platser per sätt.
+- Andelar, sannolikheter och marginaler är antaganden. De bör kalibreras, helst med en enkät bland
+  resenärerna (ändamål, marginal, vad de gjorde vid senaste inställningen).
 
-- Kortet **Samhällskostnad** på dashboarden: summa och spann för vald period, uppdelning per slag,
-  kostnad per vecka eller månad och de dyraste avgångarna.
-- Knappen **ⓘ Så räknar vi** öppnar en ruta med uträkningen, schablonerna som gäller just nu och
-  en kurva över kostnad mot försening.
+## 10. Var siffrorna syns i Tågkoll
+
+- Kortet **Samhällskostnad** på dashboarden: summa och spann för vald period, kostnad per avgång,
+  inställda och försenade avgångar, den dolda kostnaden (morgontåget), kostnad per vecka eller månad
+  per slag och de dyraste avgångarna.
+- Knappen **Så räknar vi** förklarar uträkningen med schablonerna som gäller just nu, med en kurva
+  över kostnad mot försening och tabellen över scenarierna.
 - Kolumnen **Kostnad** i tabellen över avgångar.
 - Importerad historik räknas också, eftersom den har status och försening.

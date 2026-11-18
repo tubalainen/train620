@@ -151,6 +151,7 @@ $("track-filter").addEventListener("input", renderTracks);
 // ------------------------------------------------------------ kostnadsmodell
 let costModel = null;
 const SHARE_GROUPS = {
+  common: (k) => k.startsWith("share_"),
   out_purpose: (k) => k.endsWith("_share"),
   out_margin: () => true,
   out_cancel: (k) => k.endsWith("_share"),
@@ -175,7 +176,7 @@ function updateCostForm() {
     if (!note) continue;
     const sum = costInputs().filter((i) => i.dataset.group === group && isShare(i.dataset.key))
       .reduce((a, i) => a + (parseNum(i.value) || 0), 0);
-    note.textContent = `Andelarna summerar till ${fmtNum(sum)} %` + (Math.abs(sum - 100) > 0.01 ? " – de skalas om till 100 % i beräkningen." : ".");
+    note.textContent = `${group === "common" ? "Resenärsgruppernas andelar" : "Andelarna"} summerar till ${fmtNum(sum)} %` + (Math.abs(sum - 100) > 0.01 ? " – de skalas om till 100 % i beräkningen." : ".");
     note.classList.toggle("warn", Math.abs(sum - 100) > 0.01);
   }
   const dirty = costDirty().length;
@@ -186,7 +187,7 @@ function updateCostForm() {
 function renderCostResult(m) {
   const e = m.explain;
   const kr = (n) => `${Math.round(n).toLocaleString("sv-SE")} kr`;
-  $("cost-result").textContent = `Mötesförlust ${kr(e.out.meeting_loss)} per resenär · inställd utresa ${kr(e.out.cancelled_total)} · inställd hemresa ${kr(e.home.cancelled_total)}`;
+  $("cost-result").textContent = `${e.out.passengers} resenärer · mötesförlust ${kr(e.out.meeting_loss)} · inställd utresa ${kr(e.out.cancelled.total)} · inställd hemresa ${kr(e.home.cancelled.total)}`;
 }
 
 function renderCostForm(m) {
@@ -194,7 +195,7 @@ function renderCostForm(m) {
   const box = $("cost-groups");
   box.replaceChildren();
   for (const [group, title] of Object.entries(m.groups)) {
-    const fs = el("details", { class: "cost-group", open: ["common", "out", "home"].includes(group) ? "" : null },
+    const fs = el("details", { class: "cost-group", open: ["common", "values"].includes(group) ? "" : null },
       el("summary", { text: title }));
     if (SHARE_GROUPS[group]) fs.append(el("p", { class: "group-note", "data-share-note": group }));
     for (const p of m.params.filter((x) => x.group === group)) {
