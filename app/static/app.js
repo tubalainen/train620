@@ -261,7 +261,8 @@ function renderToday(journeys) {
   box.replaceChildren(
     el("strong", { text: isToday ? "I dag" : `Senaste avgång, ${fmtLongDate(latest.date)}` }),
     statusBadge(latest.status === "pending" && latest.forecast_delay > 0 && latest.current_delay === null ? "delayed" : badge, label),
-    el("span", { class: "detail", text: detail }));
+    el("span", { class: "detail", text: detail }),
+    FINISHED.includes(latest.status) ? costLine(latest, "today-cost") : null);
 }
 
 /** "i tid", "3 min sent" eller "2 min tidigt" för en avgång. */
@@ -469,6 +470,29 @@ function fmtKr(n, { short = false } = {}) {
   if (Math.abs(n) >= 1e6) return `${nf(n / 1e6, n >= 1e7 ? 0 : 1)} milj.${short ? "" : " kr"}`;
   if (Math.abs(n) >= 1e4) return `${nf(Math.round(n / 1000) * 1000)}${short ? "" : " kr"}`;
   return `${nf(Math.round(n / 100) * 100)}${short ? "" : " kr"}`;
+}
+
+/** Kostnaden för en avgång: {total, flag} eller null om den inte är räknad (planerad, okänd, utanför perioden). */
+function journeyCost(j) {
+  const c = state.data?.cost;
+  if (c?.by_date?.[j.date] !== undefined) return { total: c.by_date[j.date], flag: c.flags?.[j.date] ?? null };
+  if (j.cost) return { total: j.cost.total, flag: j.cost.advance ? "advance" : j.cost.capped ? "capped" : null };
+  return null;
+}
+
+/** Kort text om kostnaden, med en knapp som öppnar förklaringen. */
+function costLine(j, cls) {
+  const jc = journeyCost(j);
+  if (!jc || !jc.total) return null;
+  const what = j.status === "cancelled" || j.status === "partial"
+    ? (jc.flag === "advance" ? "Inställningen var känd i förväg och" : "Inställningen")
+    : "Förseningen";
+  const text = `${what} kostade samhället ungefär ${fmtKr(jc.total)}` +
+    (jc.flag === "capped" ? " (tåget var sent redan vid avgång och räknas som ett inställt tåg)." : ".");
+  return el("span", { class: cls },
+    el("span", { class: "cost-chip-label", text: "Samhällskostnad" }),
+    document.createTextNode(` ${text} `),
+    el("button", { type: "button", class: "link-btn", text: "Så räknar vi", onclick: openCostInfo }));
 }
 
 function costCell(date) {
@@ -1122,6 +1146,9 @@ function renderLine() {
 
   const r = update(defaultT, false);
   $("line-title").textContent = `Linjen · ${fmtLongDate(j.date)}`;
+  const lc = FINISHED.includes(j.status) ? costLine(j, "") : null;
+  $("line-cost").hidden = !lc;
+  $("line-cost").replaceChildren(...(lc ? lc.childNodes : []));
   $("line-sub").textContent = lineStatusText(j, points, fullyCanceled || j.status === "pending" ? r : positionAt(real, arrival, xOf), real);
   $("line-play").onclick = () => {
     if (linePlay) { stopPlay(); update(defaultT, false); return; }
