@@ -574,13 +574,16 @@ function renderCost() {
   $("cost-top").replaceChildren(c.top.length
     ? el("table", { class: "cost-top" }, el("tbody", {}, ...c.top.map((r) => el("tr", {},
         el("td", { text: fmtLongDate(r.date) }),
-        el("td", {}, statusBadge(r.status, r.status === "delayed" ? fmtDelay(r.delay) : undefined)),
+        el("td", {}, statusBadge(r.status, r.advance ? `${STATUS[r.status].label} i förväg`
+          : r.status === "delayed" ? fmtDelay(r.delay) + (r.capped ? " (känt vid avgång)" : "") : undefined)),
         el("td", { class: "num", text: fmtKr(r.total) })))))
     : el("p", { class: "sub", text: "Inga avgångar med kostnad i perioden." }));
 
-  $("cost-note").textContent = c.paired_days
-    ? `${nf(c.paired_days)} dagar var morgontåget till Stockholm inställt. Resenärer som då aldrig åkte upp räknas inte igen på hemresan.`
-    : "";
+  const notes = [];
+  if (c.advance_days) notes.push(`${nf(c.advance_days)} inställda avgångar var kända i förväg och räknas lägre än akuta inställningar.`);
+  if (c.capped_days) notes.push(`${nf(c.capped_days)} avgångar var redan mycket sena vid avgång och räknas högst som ett inställt tåg.`);
+  if (c.paired_days) notes.push(`${nf(c.paired_days)} dagar var morgontåget till Stockholm inställt. Resenärer som då aldrig åkte upp räknas inte igen på hemresan.`);
+  $("cost-note").textContent = notes.join(" ");
 }
 
 // -------------------------------------------------------- informationsrutan
@@ -672,8 +675,9 @@ function renderCostInfo(m) {
       { cells: ["Offentlig sektor", share("share_public", groupKeys), `${nf(v.hour_public)} kr/h i arbetstid`] },
       { cells: ["Övriga (pendlare, studenter, privatresor)", share("share_other", groupKeys), `${nf(ex.out.delay_hour)} kr/h förseningstid`] },
     ], [1]),
-    p(`Förseningstid på fritid värderas enligt Trafikverkets kalkylvärden (ASEK): restidsvärdet ${nf(v.hour_leisure)} kr/h × ${nf(v.delay_factor, 1)} = ${nf(ex.out.delay_hour)} kr/h. ` +
+    p(`Förseningstid på fritid värderas enligt Trafikverkets kalkylvärden (ASEK): restidsvärdet för långväga privata tågresor, ${nf(v.hour_leisure)} kr/h, × ${nf(v.delay_factor, 1)} = ${nf(ex.out.delay_hour)} kr/h. ` +
       `På kvällen värderas allas tid så, eftersom hemresan sker efter arbetstid.`),
+    p("ASEK använder faktorn 3,5 även för tjänsteresor. Tågkoll gör inte det: faktorn fångar i ASEK följderna av att inte kunna planera, och de följderna – missade möten, att vända hem, förmiddagen efter – räknas här var för sig. Att göra både och vore att räkna samma sak två gånger."),
     p(`Arbetstid går bara delvis förlorad. Ombord på ett försenat tåg antas tjänsteresenärerna kunna arbeta ${pct0(v.prod_onboard)} av tiden, på perrongen, i ersättningsbuss eller bakom ratten ${pct0(v.prod_offboard)}.`),
 
     h("Kostnad över försening"),
@@ -688,6 +692,7 @@ function renderCostInfo(m) {
     p("Mötesförlusten räknas bara för den som har mindre marginal mellan ankomst och mötets början än förseningen. Inom varje intervall antas resenärerna vara jämnt fördelade."),
     infoTable(["Marginal till mötet", "Andel"], m.margins.map((x) => ({ cells: [x.label, share(`margin_${x.key}`, marginKeys)] })), [1]),
     p(`Den som kommer för sent förlorar ${pct0(v.effect_lt30)} av mötesförlusten vid under 30 minuter, ${pct0(v.effect_30_90)} vid 30–90 minuter och ${pct0(v.effect_gt90)} vid mer än 90 minuter. ` +
+      `Från 30 minuters försening deltar ${pct0(v.digital_onboard_share)} av de sena digitalt från tåget och förlorar då bara ${pct0(v.out_digital_effect)}. ` +
       `Är tåget mer än ${nf(v.abort_after)} minuter sent vänder ${pct0(v.abort_share)} av tjänsteresenärerna hem: de förlorar ${unitText(v.abort_hours, "h")} arbetstid och hela mötesförlusten.`),
     infoTable(["Försening", "Tid", "Möten", "Dagen efter", `Summa (${nf(ex.out.passengers)} resenärer)`], exampleRows(ex.out.delay_examples), [1, 2, 3, 4]),
 
@@ -716,6 +721,19 @@ function renderCostInfo(m) {
     ], [1]),
     p(`Alla som kommer hem sent räknas också med förmiddagen efter och familjelogistik, och ersättningstrafiken (${kr(v.ops_cost)}) ingår.`),
 
+    h("Känt i förväg eller akut"),
+    p(`Ett inställt tåg som var känt minst ${unitText(v.advance_hours, "h")} före avgång kostar mindre: resenärerna hinner boka om, flytta mötet eller åka på annat sätt, och ingen står och väntar. ` +
+      `Resenärernas kostnad räknas då som ${pct0(v.advance_out)} av en akut inställning för utresan och ${pct0(v.advance_home)} för hemresan; ersättningstrafiken räknas fullt.`),
+    p(`En försening som är minst ${nf(v.known_delay_after)} minuter redan vid avgång är också känd: resenärerna kan välja som vid ett inställt tåg. Den avgången räknas därför högst som ett akut inställt tåg. ` +
+      "En försening som uppstår under resan har inget sådant tak – då sitter resenärerna fast och kan inte välja, och det kan bli dyrare än ett inställt tåg."),
+    infoTable(["", "Utresa", "Hemresa"], [
+      { cells: ["Inställt, akut", fmtKr(ex.out.cancelled.total), fmtKr(ex.home.cancelled.total)] },
+      { cells: ["Inställt, känt i förväg", fmtKr(ex.out.cancelled_advance), fmtKr(ex.home.cancelled_advance)] },
+      ...ex.out.late_examples.map((e, i) => ({ cells: [`+${e.delay} min, uppstod under resan / känd vid avgång`,
+        `${fmtKr(e.en_route)} / ${fmtKr(e.at_start)}`, `${fmtKr(ex.home.late_examples[i].en_route)} / ${fmtKr(ex.home.late_examples[i].at_start)}`] })),
+    ], [1, 2]),
+    p("Tågkoll ser när Trafikverket senast ändrade en inställd avgång och hur sent tåget var när det lämnade startstationen. Importerad historik saknar de uppgifterna och räknas som akut och som försening under resan."),
+
     h("Kopplingen mellan morgon och kväll"),
     p(`Den som inte kom iväg på morgonen åker inte hem på kvällen. Om ett bevakat tåg till Stockholm ställdes in samma dag antas ${pct0(v.home_paired_share)} av hemresenärerna ha åkt upp med det, ` +
       "och de tjänsteresenärer som då deltog digitalt eller ställde in resan räknas inte igen på hemresan. Var morgontåget bara försenat påverkas inte hemresan."),
@@ -739,7 +757,7 @@ function renderCostInfo(m) {
     el("ul", {},
       el("li", { text: "Produktivitet ombord: den som sitter kvar på ett försenat tåg kan oftast arbeta. Bara väntan på perrong, buss och bil räknas med låg arbetsförmåga." }),
       el("li", { text: "Alla som ska på möte missar inte: mötesförlusten vägs med marginal och sannolikhet, och en del deltar digitalt eller tar nästa tåg." }),
-      el("li", { text: "Förseningsfaktorn 3,5 används bara för fritid. Arbetstid är redan värderad till sitt fulla värde och räknas inte upp en gång till." }),
+      el("li", { text: "Förseningsfaktorn 3,5 används bara för fritid. För tjänsteresenärerna räknas följderna av förseningen (möten, vända hem, dagen efter) var för sig i stället." }),
       el("li", { text: "Den andra beräkningen antar i praktiken att alla resenärer förlorar en halv arbetsdag när morgontåget ställs in. Här tar många nästa tåg eller deltar digitalt." })),
     p("Det höga scenariot använder den andra beräkningens antaganden om beläggning, konsulternas timvärde och arbetsförmåga ombord. Resten av skillnaden kommer av punkterna ovan."),
 

@@ -2,6 +2,17 @@
 
 Varje release får ett avsnitt `## [x.y.z] - ÅÅÅÅ-MM-DD`. Avsnittet blir releasetexten på GitHub.
 
+## [2.6.1] - 2026-11-18
+
+- **Inställt i förväg räknas lägre.** Ett tåg som ställs in minst 8 timmar före avgång, till exempel på grund av banarbete, kostar nu ungefär hälften så mycket som en akut inställning. Resenärerna hinner boka om, flytta mötet eller åka på annat sätt, och ingen står och väntar på perrongen.
+- **Försening som syns redan vid avgång får ett tak.** Är tåget minst 30 minuter sent redan när det lämnar startstationen kan resenärerna välja som vid ett inställt tåg, och avgången räknas då högst som ett inställt tåg. En försening som uppstår under resan kan fortfarande bli dyrare än ett inställt tåg, eftersom resenärerna då sitter fast.
+- **Digitalt deltagande från tåget.** Vid minst 30 minuters försening räknas med att en del av de sena kopplar upp sig på mötet från tåget, vilket sänker kostnaden för långa förseningar något.
+- **Restidsvärdet följer ASEK.** Värdet för privat restid är nu 115 kr/h i stället för 130 kr/h, uppräknat från Trafikverkets värde för långväga tågresor. Förseningstid på fritid blir därmed 402 kr/h.
+- *Så räknar vi* har ett nytt avsnitt om känt i förväg och akut, och rättar beskrivningen av hur ASEK behandlar tjänsteresor. Kortet visar hur många avgångar som räknats som kända i förväg.
+- De nya schablonerna finns på adminsidan under *Känt i förväg*.
+
+Avgångar som importerats från CSV saknar uppgift om när inställningen gjordes och om förseningen vid avgång, och räknas som tidigare.
+
 ## [2.6.0] - 2026-11-18
 
 - Nytt: **Samhällskostnad.** Ett nytt kort på dashboarden visar ungefär vad förseningarna och de inställda avgångarna har kostat samhället under vald period: summan med ett spann (lågt–högt scenario), kostnad per avgång i snitt, hur mycket som beror på inställda respektive försenade avgångar, kostnaden per vecka eller månad uppdelad på förlorad tid, missade möten, dagen efter och familj, hotellnätter, andra resor och ersättningstrafik, samt de dyraste avgångarna. Importerad historik räknas också.
