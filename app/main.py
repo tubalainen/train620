@@ -852,12 +852,23 @@ def cost_stats(ident: str, journeys: list[dict], since: str | None, profile: str
         "periods": [periods[k] for k in sorted(periods)],
         "top": sorted((r for r in rows if r["total"] > 0), key=lambda r: r["total"], reverse=True)[:5],
         "by_date": {r["date"]: r["total"] for r in rows},
+        "flags": {r["date"]: "advance" if r["advance"] else "capped" for r in rows if r["advance"] or r["capped"]},
         "paired_days": sum(r["paired"] for r in rows),
         "advance_days": sum(r["advance"] for r in rows),
         "capped_days": sum(r["capped"] for r in rows),
         "hidden": hidden,
         "hidden_per_day": p["hidden_per_day"],
     }
+
+
+def single_journey_cost(ident: str, j: dict) -> dict | None:
+    """Kostnaden för en enskild avgång (för en äldre avgång som visas på linjen)."""
+    profile = train_profile(ident)
+    if not profile:
+        return None
+    p = load_cost_params()
+    stayed = cost.stayed_home_share(p, morning_statuses(ident, j["date"]).get(j["date"])) if profile == "home" else 0.0
+    return cost.journey_cost(p, profile, j["status"], j["delay"], stayed, **cost.known_in_advance(p, j))
 
 
 def cost_model() -> dict:
@@ -1105,7 +1116,11 @@ def one_journey(train: str = Query(max_length=10), day: str = Query(alias="date"
             rows = conn.execute("SELECT * FROM announcements WHERE train_ident = ? AND departure_date = ?",
                                 (train, day)).fetchall()
             tracks = load_tracks(conn)
-        return build_journey(day, rows, names, datetime.now(TZ), tracks) if rows else None
+        if not rows:
+            return None
+        j = build_journey(day, rows, names, datetime.now(TZ), tracks)
+        j["cost"] = single_journey_cost(train, j)
+        return j
     j = cached(("journey", train, day), compute)
     if not j or len(j["points"]) < 2:
         raise HTTPException(404, "Det finns inga hållplatsdata för den avgången.")

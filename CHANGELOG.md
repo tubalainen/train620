@@ -2,6 +2,13 @@
 
 Varje release får ett avsnitt `## [x.y.z] - ÅÅÅÅ-MM-DD`. Avsnittet blir releasetexten på GitHub.
 
+## [2.6.2] - 2026-11-18
+
+- Rutan *I dag* (eller *Senaste avgång*) visar vad förseningen eller det inställda tåget kostade samhället, till exempel "Inställningen kostade samhället ungefär 596 000 kr". Var inställningen känd i förväg står det också. En länk öppnar *Så räknar vi*.
+- Linjekortet visar samma uppgift för den avgång som visas, även när du väljer en äldre avgång i listan.
+- Avgångar i tid visar ingen kostnad.
+- Rättat: en tom ruta kunde synas under *I dag* när det inte fanns några kommande avgångar.
+
 ## [2.6.1] - 2026-11-18
 
 - **Inställt i förväg räknas lägre.** Ett tåg som ställs in minst 8 timmar före avgång, till exempel på grund av banarbete, kostar nu ungefär hälften så mycket som en akut inställning. Resenärerna hinner boka om, flytta mötet eller åka på annat sätt, och ingen står och väntar på perrongen.
