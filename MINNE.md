@@ -3,7 +3,7 @@
 Överlämning mellan chattsessioner. Läs den här filen och `CLAUDE.md` först i en ny session,
 och uppdatera filen när något viktigt ändras (direkt till `main`, utan PR och release).
 
-*Senast uppdaterad: 2026-11-17, efter release v2.5.2.*
+*Senast uppdaterad: 2026-11-18, efter release v2.6.0.*
 
 ## Vad Tågkoll är
 
@@ -22,6 +22,10 @@ Karlstad C, SJ Snabbtåg) bevakas.
   förseningen?"; ett framkommet tåg står vid slutstationen, pågående visas nu-läget,
   inställda/delvis inställda står kvar där de stannade), punktlighet, försenade/inställda, medelförsening, försening per avgång,
   vecka, veckodag och station, samt tabell med alla avgångar (utfällbar per station).
+- **Samhällskostnad (2.6.0):** `app/cost.py` + kort på dashboarden, dialog *Så räknar vi*, kolumn
+  *Kostnad* i tabellen, avsnitt *Kostnadsmodell* på `/admin` (tabell `cost_params`, bara ändrade
+  värden sparas). Profil efter riktning: slutar i Stockholm = utresa (`out`), börjar där = hemresa
+  (`home`), annars ingen kostnad. Modellen beskrivs i `docs/kostnadsmodell.md`.
 - **Admin `/admin`:** lösenordsskyddad (`ADMIN_PASSWORD`). Lägga till/ta bort tåg, *Uppdatera
   nu*, CSV-import av historik (filval, drag-och-släpp, inklistring) och *Radera allt och börja om*.
 - **Definition:** försenat = mer än 5 min sent till slutstationen. Inställda och delvis
@@ -100,6 +104,15 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
 
 ## Releaser
 
+- **v2.6.0** (2026-11-18), släppt och kontrollerad (PR #27, Release #20, `docker pull` av `2.6.0` och
+  `latest` utan inloggning, samma image, `app/cost.py` finns i imagen): samhällskostnad. Användarens
+  beslut: SJ 3000 (ca 240 platser, **inte X2000**), 85 % beläggning, konsulter 1 250 kr/h, grupper
+  40/40/20 (konsult/offentlig/övriga, Claude valde), dold kostnad (resor kvällen före, 10/avgång –
+  Claude valde antalet) visas separat utanför summan. Modellen jämfördes med användarens bifogade
+  kalkyl (300 resenärer, 1 350 kr/h, 15 % produktivitet → 2,1 Mkr per inställt 620); Tågkoll
+  ger ca 600 000 kr (620) och 713 000 kr (643) per inställd avgång. ASEK-faktorn 3,5 bekräftad
+  (riksdagens RFR 2025/26:RFR21); restidsvärdet 130 kr/h är ett antagande. Testat med testdatabas för
+  620 och 643. Ej bekräftat med riktiga data på totoro.
 - **v2.5.2** (2026-11-17), släppt och kontrollerad (PR #26, Release #19, `docker pull` av `2.5.2` och
   `latest` utan inloggning, samma image, `locoColor` finns i `/srv/app/static/app.js`): ångloket ryker
   bara när det rullar mellan två olika punkter (`positionAt` ger `moving`; uppehåll på station, före
@@ -194,6 +207,9 @@ Användarens slutliga besked (efter flera rundor 2.1.2–2.1.5):
 
 ## Öppna punkter
 
+- 2.6.0: fråga om summorna i *Samhällskostnad* ser rimliga ut med riktiga data, och om 620/643
+  ibland går med två SJ 3000-sätt (ändra då *Sittplatser* på `/admin`). Restidsvärdet 130 kr/h
+  bör kontrolleras mot ASEK:s kalkylbilaga.
 - Besöksräknaren läser IP från `CF-Connecting-IP`/`X-Forwarded-For`. Om användarens Nginx
   Proxy Manager inte skickar vidare dem blir alla besökare samma IP (bara webbläsaren skiljer)
   och siffran blir för låg. Be användaren säga till om siffran ser konstig ut.
