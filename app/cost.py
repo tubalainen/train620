@@ -7,6 +7,8 @@ Modellen beskrivs i docs/kostnadsmodell.md. Kort:
   tid på kvällen, värderas som förseningstid enligt Trafikverkets ASEK (3,5 × restidsvärdet).
 * Hur mycket arbetstid som går förlorad beror på var resenären är: ombord kan de flesta arbeta,
   på perrongen, i ersättningsbussen eller bakom ratten nästan inte.
+* En inställning som var känd i förväg kostar mindre än en akut, och en försening som var känd
+  redan vid avgång kostar högst som ett inställt tåg (resenärerna kan välja som vid inställt).
 * Ett tåg *till* Stockholm (620 på morgonen) räknas som **utresa**: förlorad arbetstid plus den
   förväntade kostnaden för möten, konferenser, utbildningar och övningar som resenärerna kommer
   sent till eller missar. En försening kostar bara för den som har mindre marginal än
@@ -21,6 +23,7 @@ Resultatet är ett förväntat värde: en enskild avgång kan kosta mer eller mi
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 
 
 @dataclass(frozen=True)
@@ -45,6 +48,7 @@ GROUPS = {
     "out_cancel": "Utresa: vad tjänsteresenärerna gör när tåget ställs in",
     "home": "Hemresa från Stockholm (kväll)",
     "home_cancel": "Hemresa: vad resenärerna gör när tåget ställs in",
+    "known": "Känt i förväg",
     "operations": "Ersättningstrafik och hantering",
     "hidden": "Dold kostnad: resor kvällen före",
     "scenario": "Spann: lågt och högt scenario",
@@ -92,8 +96,8 @@ PARAMS: list[Param] = [
           "Genomsnittligt värde av en konsulttimme."),
     Param("hour_public", "values", "Offentlig sektor: kostnad per arbetstimme", "kr/h", 650,
           "Lön, arbetsgivaravgifter och omkostnader (ASEK värderar tjänsteresor efter arbetsgivarens kostnad)."),
-    Param("hour_leisure", "values", "Restidsvärde på fritid", "kr/h", 130,
-          "Privat restid för långväga resor. Antagande, kontrollera mot ASEK:s kalkylbilaga."),
+    Param("hour_leisure", "values", "Restidsvärde på fritid", "kr/h", 115,
+          "ASEK: långväga privata resor med tåg, 85 kr/h i 2017 års priser, uppräknat till dagens penningvärde (+5 % rättning i ASEK 8.0, inflation)."),
     Param("delay_factor", "values", "Förseningsfaktor (ASEK)", "×", 3.5,
           "ASEK värderar förseningstid till 3,5 gånger normal restid.", 10),
 
@@ -124,6 +128,8 @@ PARAMS: list[Param] = [
     Param("effect_30_90", "out_effect", "Sen 30–90 min", "%", 40, "Andel av den fulla mötesförlusten.", 100),
     Param("effect_gt90", "out_effect", "Sen mer än 90 min eller nästa tåg", "%", 60,
           "Andel av den fulla mötesförlusten.", 100),
+    Param("digital_onboard_share", "out_effect", "Deltar digitalt från tåget vid minst 30 min försening", "%", 25,
+          "Andel av de sena som kopplar upp sig på mötet från tåget. De förlorar bara den del som gäller digitalt deltagande.", 100),
 
     Param("out_next_share", "out_cancel", "Tar nästa tåg: andel", "%", 45, "", 100),
     Param("out_next_hours", "out_cancel", "Tar nästa tåg: senare ankomst", "h", 2,
@@ -170,6 +176,14 @@ PARAMS: list[Param] = [
     Param("home_other_share", "home_cancel", "Annat (taxi, skjuts, sitter fast): andel", "%", 10, "", 100),
     Param("home_other_cost", "home_cancel", "Annat: kostnad per person", "kr", 1500, ""),
 
+    Param("known_delay_after", "known", "Försening vid avgång som räknas som känd", "min", 30,
+          "Är tåget så här sent redan vid avgång kan resenärerna välja som vid inställt. Avgången räknas då högst som ett inställt tåg.", 600),
+    Param("advance_hours", "known", "Inställt i förväg: känt minst så här länge före avgång", "h", 8,
+          "Tågkoll ser när Trafikverket senast ändrade den inställda avgången. Gäller bara avgångar som samlats in från Trafikverket.", 168),
+    Param("advance_out", "known", "Inställt i förväg, utresa: resenärernas kostnad som andel av akut inställt", "%", 40,
+          "Resenärerna bokar om, flyttar mötet, kör bil enligt plan eller deltar digitalt. Ingen väntan på perrongen.", 100),
+    Param("advance_home", "known", "Inställt i förväg, hemresa: resenärernas kostnad som andel av akut inställt", "%", 30,
+          "Resenärerna åker hem tidigare, bokar annat tåg eller hotell i lugn och ro. Nästan inga akuta lösningar.", 100),
     Param("ops_cost", "operations", "Ersättningstrafik och hantering per inställd avgång", "kr", 50000,
           "Ersättningsbussar, taxi, personal och administration. SJ:s förseningsersättning räknas inte: den är en överföring."),
 
@@ -292,7 +306,11 @@ def out_delayed(p: dict, delay: float) -> dict[str, float]:
     g = groups(p)
     m = meeting_loss(p)
     stay = delay / 60 * g["work_hour"] * (1 - p["prod_onboard"] / 100)
-    meet = _affected(p, delay) * _effect(p, delay) * m
+    effect = _effect(p, delay)
+    if delay >= 30:  # en del av de sena deltar digitalt från tåget i stället
+        d = p["digital_onboard_share"] / 100
+        effect = (1 - d) * effect + d * min(effect, p["out_digital_effect"] / 100)
+    meet = _affected(p, delay) * effect * m
     a = p["abort_share"] / 100 if delay > p["abort_after"] else 0.0
     c["time"] = g["work"] * ((1 - a) * stay + a * p["abort_hours"] * g["work_hour"]) + g["other"] * delay / 60 * g["delay_hour"]
     c["meetings"] = g["work"] * ((1 - a) * meet + a * m)
@@ -346,26 +364,54 @@ def home_cancelled(p: dict) -> dict[str, float]:
     return c
 
 
-def journey_cost(p: dict, profile: str, status: str, delay: int | None, stayed_home: float = 0.0) -> dict | None:
+def known_in_advance(p: dict, j: dict) -> dict:
+    """Om inställningen var känd i förväg, och om förseningen var känd redan vid avgång.
+
+    Bygger på Trafikverkets ändringstid för de inställda raderna och på avgångsförseningen.
+    Importerad historik saknar båda och räknas därför som akut.
+    """
+    advance = False
+    if j.get("status") in ("cancelled", "partial") and j.get("canceled_known_at") and j.get("planned_departure"):
+        try:
+            known = datetime.fromisoformat(j["canceled_known_at"])
+            dep = datetime.fromisoformat(j["planned_departure"])
+            advance = known <= dep - timedelta(hours=p["advance_hours"])
+        except (TypeError, ValueError):
+            advance = False
+    dep_delay = j.get("departure_delay")
+    late_at_start = j.get("status") in ("delayed", "ontime") and dep_delay is not None and dep_delay >= p["known_delay_after"]
+    return {"advance": advance, "late_at_start": late_at_start}
+
+
+def journey_cost(p: dict, profile: str, status: str, delay: int | None, stayed_home: float = 0.0,
+                 advance: bool = False, late_at_start: bool = False) -> dict | None:
     """Kostnad för en avgång, eller None om den inte går att räkna (planerad, uppgift saknas).
 
     stayed_home är andelen av hemresenärerna som aldrig åkte upp (morgontåget inställt samma dag).
+    advance: inställningen var känd i förväg, så resenärerna hann planera om.
+    late_at_start: förseningen var känd redan vid avgång, så avgången kostar högst som ett inställt tåg.
     """
     if status not in ("ontime", "delayed", "partial", "cancelled"):
         return None
     n = passengers(p) * (1 - stayed_home if profile == "home" else 1)
     cancelled, delayed = (out_cancelled, out_delayed) if profile == "out" else (home_cancelled, home_delayed)
     ops = 0.0
-    if status == "cancelled":
-        per, ops = cancelled(p), p["ops_cost"]
-    elif status == "partial":
-        f = p["partial_factor"] / 100
-        per, ops = {k: v * f for k, v in cancelled(p).items()}, p["ops_cost"] * f
+    capped = False
+    if status in ("cancelled", "partial"):
+        f = p["partial_factor"] / 100 if status == "partial" else 1.0
+        if advance:
+            f *= p["advance_out" if profile == "out" else "advance_home"] / 100
+        per = {k: v * f for k, v in cancelled(p).items()}
+        ops = p["ops_cost"] * (p["partial_factor"] / 100 if status == "partial" else 1.0)
     else:
         per = delayed(p, delay or 0)
+        if late_at_start:
+            cap = cancelled(p)
+            if sum(per.values()) > sum(cap.values()):
+                per, ops, capped = cap, p["ops_cost"], True
     kinds = {k: round(v * n) for k, v in per.items()}
     kinds["ops"] = round(ops)
-    return {"total": sum(kinds.values()), "kinds": kinds, "passengers": round(n)}
+    return {"total": sum(kinds.values()), "kinds": kinds, "passengers": round(n), "advance": advance, "capped": capped}
 
 
 def stayed_home_share(p: dict, morning_status: str | None) -> float:
@@ -404,4 +450,8 @@ def explain(p: dict, profile: str) -> dict:
                           "delay60": journey_cost(scenario(p, w), profile, "delayed", 60)["total"]}
                       for w in ("low", "base", "high")},
         "hidden_per_journey": round(hidden_cost(p)) if profile == "out" else 0,
+        "cancelled_advance": journey_cost(p, profile, "cancelled", None, advance=True)["total"],
+        "late_examples": [{"delay": d, "en_route": journey_cost(p, profile, "delayed", d)["total"],
+                           "at_start": journey_cost(p, profile, "delayed", d, late_at_start=True)["total"]}
+                          for d in (60, 120, 180)],
     }

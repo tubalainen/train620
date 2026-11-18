@@ -579,6 +579,9 @@ def build_journey(day: str, rows: list[sqlite3.Row], names: dict[str, str], now:
         "product": next((r["product"] for r in stops if r["product"]), None),
         "deviations": deviations,
         "source": "trafikverket",
+        # När inställningen senast kan ha gjorts: en inställd rads senaste ändring. Ändras raden inte
+        # efter inställningen är det tidpunkten för inställningen, annars en senare tid.
+        "canceled_known_at": min((r["modified_time"] for r in stops if r["canceled"] and r["modified_time"]), default=None),
         "stops": [
             {
                 "sig": r["location"],
@@ -653,7 +656,7 @@ def load_journeys(ident: str, since: str | None, upcoming: bool = False) -> list
         if r["departure_date"] not in journeys:
             journeys[r["departure_date"]] = {
                 "date": r["departure_date"], "status": r["status"], "delay": r["delay_min"],
-                "current_delay": None, "forecast_delay": None, "last_station": None,
+                "current_delay": None, "forecast_delay": None, "last_station": None, "canceled_known_at": None,
                 "actual_departure": None, "departure_delay": None, "estimated_departure": None, "estimated_arrival": None, "origin": None, "destination": None,
                 "planned_departure": None, "planned_arrival": None, "actual_arrival": None,
                 "operator": None, "product": None, "deviations": [], "source": r["source"] or "import",
@@ -801,14 +804,19 @@ def cost_stats(ident: str, journeys: list[dict], since: str | None, profile: str
     morning = morning_statuses(ident, since) if profile == "home" else {}
     rows, low_total, high_total = [], 0, 0
     for j in journeys:
+        known = cost.known_in_advance(p, j)
         stayed = cost.stayed_home_share(p, morning.get(j["date"])) if profile == "home" else 0.0
-        c = cost.journey_cost(p, profile, j["status"], j["delay"], stayed)
+        c = cost.journey_cost(p, profile, j["status"], j["delay"], stayed, **known)
         if c:
             rows.append({"date": j["date"], "status": j["status"], "delay": j["delay"], **c, "paired": stayed > 0})
-            low_total += cost.journey_cost(low, profile, j["status"], j["delay"],
-                                           cost.stayed_home_share(low, morning.get(j["date"])) if stayed else 0.0)["total"]
-            high_total += cost.journey_cost(high, profile, j["status"], j["delay"],
-                                            cost.stayed_home_share(high, morning.get(j["date"])) if stayed else 0.0)["total"]
+            for q, add in ((low, "low"), (high, "high")):
+                v = cost.journey_cost(q, profile, j["status"], j["delay"],
+                                      cost.stayed_home_share(q, morning.get(j["date"])) if stayed else 0.0,
+                                      **cost.known_in_advance(q, j))["total"]
+                if add == "low":
+                    low_total += v
+                else:
+                    high_total += v
     total = sum(r["total"] for r in rows)
     kinds = {k: sum(r["kinds"][k] for r in rows) for k in cost.KINDS}
     by_status = {s: sum(r["total"] for r in rows if r["status"] == s) for s in FINISHED}
@@ -845,6 +853,8 @@ def cost_stats(ident: str, journeys: list[dict], since: str | None, profile: str
         "top": sorted((r for r in rows if r["total"] > 0), key=lambda r: r["total"], reverse=True)[:5],
         "by_date": {r["date"]: r["total"] for r in rows},
         "paired_days": sum(r["paired"] for r in rows),
+        "advance_days": sum(r["advance"] for r in rows),
+        "capped_days": sum(r["capped"] for r in rows),
         "hidden": hidden,
         "hidden_per_day": p["hidden_per_day"],
     }
