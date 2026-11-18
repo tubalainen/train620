@@ -3,7 +3,7 @@
 Överlämning mellan chattsessioner. Läs den här filen och `CLAUDE.md` först i en ny session,
 och uppdatera filen när något viktigt ändras (direkt till `main`, utan PR och release).
 
-*Senast uppdaterad: 2026-11-18, efter release v2.6.2.*
+*Senast uppdaterad: 2026-11-18, efter release v3.0.0.*
 
 ## Vad Tågkoll är
 
@@ -26,6 +26,12 @@ Karlstad C, SJ Snabbtåg) bevakas.
   *Kostnad* i tabellen, avsnitt *Kostnadsmodell* på `/admin` (tabell `cost_params`, bara ändrade
   värden sparas). Profil efter riktning: slutar i Stockholm = utresa (`out`), börjar där = hemresa
   (`home`), annars ingen kostnad. Modellen beskrivs i `docs/kostnadsmodell.md`.
+- **Utformning 3.0.0:** tågval överst (knappar med sträcka), **Nu-kort** med en avgång i taget
+  (`renderNow`/`nowFacts`/`statusHeadline`, bläddring `stepDay`, kommande dagar som rad), **flikar**
+  Översikt/Punktlighet/Kostnad/Avgångar med periodvalet på flikraden (`setTab`, `renderTabCharts` –
+  diagram ritas bara i synlig flik; hash `#overview|#punct|#cost|#table` + localStorage), tabellen med
+  urval/sortering (`tableRows`). Skissen finns som artifact "Tågkoll 3.0 skiss". Princip: säg varje
+  sak en gång, statusfärger bara för status, kostnadsslag i blå/turkos/lila/rosa/gul/grå.
 - **Admin `/admin`:** lösenordsskyddad (`ADMIN_PASSWORD`). Lägga till/ta bort tåg, *Uppdatera
   nu*, CSV-import av historik (filval, drag-och-släpp, inklistring) och *Radera allt och börja om*.
 - **Definition:** försenat = mer än 5 min sent till slutstationen. Inställda och delvis
@@ -104,6 +110,11 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
 
 ## Releaser
 
+- **v3.0.0** (2026-11-18), släppt och kontrollerad (PR #30, Release #23, `docker manifest inspect` av
+  `3.0.0` och `latest` utan inloggning: samma digest sha256:7de72a74ec5a…): ny utformning av hela
+  dashboarden efter användarens kritik ("rörig"). Användaren valde båda målgrupperna lika viktiga,
+  flikar, skiss först och major-version. Inga ändringar i API eller databas. Testat med testdatabas
+  (620 + 643, alla flikar, ljust/mörkt/mobil). Ej bekräftat med riktiga data på totoro.
 - **v2.6.2** (2026-11-18), släppt och kontrollerad (PR #29, Release #22, `docker pull` av `2.6.2` och
   `latest` utan inloggning, samma image): *I dag* och linjekortet visar kostnaden för den aktuella
   avgången (`costLine` i `app.js`; `cost.flags` i `/api/stats`, `cost` i `/api/journey`). Rättat:
@@ -221,6 +232,8 @@ Användarens slutliga besked (efter flera rundor 2.1.2–2.1.5):
 
 ## Öppna punkter
 
+- 3.0.0: fråga om den nya utformningen fungerar med riktiga data, särskilt Nu-kortet och raden
+  *Kommande dagar* (testdatan hade inga framtida avgångar, så raden är bara provad i kod).
 - 2.6.0: fråga om summorna i *Samhällskostnad* ser rimliga ut med riktiga data, och om 620/643
   ibland går med två SJ 3000-sätt (ändra då *Sittplatser* på `/admin`). Restidsvärdet 130 kr/h
   bör kontrolleras mot ASEK:s kalkylbilaga.
