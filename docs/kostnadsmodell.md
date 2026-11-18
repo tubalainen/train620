@@ -276,10 +276,12 @@ arbetsförmåga ombord. Resten av skillnaden kommer av punkterna ovan.
 
 ## 11. Var siffrorna syns i Tågkoll
 
-- Kortet **Samhällskostnad** på dashboarden: summa och spann för vald period, kostnad per avgång,
-  inställda och försenade avgångar, den dolda kostnaden (morgontåget), kostnad per vecka eller månad
-  per slag och de dyraste avgångarna.
-- Knappen **Så räknar vi** förklarar uträkningen med schablonerna som gäller just nu, med en kurva
+- **Nu-kortet** överst: kostnaden för den valda avgången, med en kort förklaring (akut inställt,
+  känt i förväg, försening under resan).
+- **Översikt:** samhällskostnaden för perioden som nyckeltal, med spann.
+- **Kostnad:** summa och spann, kostnad per avgång, den dolda kostnaden (morgontåget), fördelningen
+  mellan inställda och försenade avgångar, kostnad per vecka eller månad per slag och uppdelningen.
+  Knappen **Så räknar vi** förklarar uträkningen med schablonerna som gäller just nu, med en kurva
   över kostnad mot försening och tabellen över scenarierna.
-- Kolumnen **Kostnad** i tabellen över avgångar.
+- **Avgångar:** kolumnen *Kostnad*, och sortering på dyrast.
 - Importerad historik räknas också, eftersom den har status och försening.

@@ -23,7 +23,16 @@ const state = {
   lineDate: null,
   lineExtra: null,   // en äldre avgång som hämtats separat för uppspelning
   replayable: [],    // alla avgångar med hållplatsdata, nyast först
+  tab: storedTab(),
+  filter: "all",     // Avgångar-fliken: alla eller bara störningar
+  sort: "date",      // Avgångar-fliken: date, delay eller cost
 };
+
+function storedTab() {
+  const fromHash = location.hash.replace("#", "");
+  if (["overview", "punct", "cost", "table"].includes(fromHash)) return fromHash;
+  try { return localStorage.getItem("tab") || "overview"; } catch { return "overview"; }
+}
 
 // ------------------------------------------------------------------ helpers
 function el(tag, props = {}, ...children) {
@@ -213,57 +222,133 @@ function statusBadge(key, labelOverride) {
 }
 
 function renderTrains() {
-  const box = $("trains");
-  box.replaceChildren();
-  for (const t of state.trains) {
+  $("trains").replaceChildren(...state.trains.map((t) => {
     const active = t.ident === state.train;
-    box.append(el("span", { class: "chip" + (active ? " active" : "") },
-      el("button", { type: "button", role: "tab", "aria-selected": active, text: t.ident,
-        title: [t.origin ? `${t.origin} → ${t.destination}` : null, ageText(t)].filter(Boolean).join("\n"), onclick: () => selectTrain(t.ident) })));
-  }
+    return el("button", { type: "button", class: "train" + (active ? " active" : ""), "aria-pressed": String(active),
+      onclick: () => selectTrain(t.ident) },
+      el("span", { class: "train-id", text: t.ident }),
+      el("span", { class: "train-route", text: t.origin ? `${t.origin} → ${t.destination}` : "Inga uppgifter ännu" }));
+  }));
   for (const b of $("periods").children) b.setAttribute("aria-pressed", String(b.dataset.days === state.days));
 }
 
-function renderToday(journeys) {
-  const box = $("today");
-  const latest = journeys[0];
-  box.hidden = !latest;
-  if (!latest) return;
-  const isToday = latest.date === new Date().toLocaleDateString("sv-SE");
-  let label, detail, badge = latest.status;
-  const reason = latest.deviations.length ? ` ${latest.deviations.slice(0, 2).join(", ")}.` : "";
-  if (latest.status === "pending") {
-    const moving = latest.current_delay !== null;
-    label = moving ? "På väg" : "Planerat";
-    if (moving) {
-      label = latest.actual_departure ? "Har avgått" : "På väg";
-      badge = latest.current_delay > state.data.threshold ? "delayed" : "ontime";
-      const parts = [];
-      if (latest.actual_departure) parts.push(`Avgick från ${latest.origin} ${hhmm(latest.actual_departure)}, ${departureText(latest.departure_delay)}.`);
-      if (latest.last_station && latest.last_station !== latest.origin) {
-        parts.push(`Senast vid ${latest.last_station}: ${latest.current_delay > 0 ? `${latest.current_delay} min sent` : "i tid"}.`);
-      }
-      parts.push(`Beräknad ankomst ${latest.destination ?? "slutstationen"} ${hhmm(latest.estimated_arrival || latest.planned_arrival)}.`);
-      detail = parts.join(" ");
-    } else if (latest.forecast_delay > 0) {
-      label = "Väntas bli försenat";
-      detail = forecastText(latest) + reason;
-    } else {
-      detail = `Avgår ${hhmm(latest.planned_departure)}, ankomst ${hhmm(latest.planned_arrival)}.`;
-    }
-  } else if (latest.status === "cancelled") {
-    detail = "Hela avgången ställdes in." + reason;
-  } else if (latest.delay !== null) {
-    detail = `Ankom ${latest.destination ?? "slutstationen"} ${hhmm(latest.actual_arrival)} (${fmtDelay(latest.delay)}).`;
-  } else {
-    detail = latest.status === "partial" ? "Delar av sträckan ställdes in." : "Ingen ankomsttid har rapporterats.";
-  }
-  box.replaceChildren(
-    el("strong", { text: isToday ? "I dag" : `Senaste avgång, ${fmtLongDate(latest.date)}` }),
-    statusBadge(latest.status === "pending" && latest.forecast_delay > 0 && latest.current_delay === null ? "delayed" : badge, label),
-    el("span", { class: "detail", text: detail }),
-    FINISHED.includes(latest.status) ? costLine(latest, "today-cost") : null);
+// ------------------------------------------------------------------ nu-kortet
+/** Avgången som Nu-kortet visar: vald avgång på linjen, annars den senaste. */
+function nowJourney() {
+  const d = state.data;
+  if (!d) return null;
+  return lineJourney(d.journeys) ?? d.journeys[0] ?? null;
 }
+
+/** Statusrubriken: färgnyckel och kort text. */
+function statusHeadline(j) {
+  if (j.status === "ontime") return { key: "ontime", text: "I tid" };
+  if (j.status === "delayed") return { key: "delayed", text: `Försenat ${j.delay} min` };
+  if (j.status === "cancelled") return { key: "cancelled", text: "Inställt" };
+  if (j.status === "partial") return { key: "partial", text: "Delvis inställt" };
+  if (j.status === "unknown") return { key: "unknown", text: "Uppgift saknas" };
+  if (j.current_delay !== null && j.current_delay !== undefined) {
+    return j.current_delay > state.data.threshold
+      ? { key: "delayed", text: `På väg, ${j.current_delay} min sent` }
+      : { key: "ontime", text: "På väg, i tid" };
+  }
+  if (j.forecast_delay > 0) return { key: "delayed", text: `Väntas bli ${j.forecast_delay} min sent` };
+  return { key: "pending", text: "Planerat" };
+}
+
+function costFact(j) {
+  if (!FINISHED.includes(j.status)) return ["Samhällskostnad", "–", "räknas när tåget är framme"];
+  const jc = journeyCost(j);
+  if (!jc) return ["Samhällskostnad", "–", state.data?.cost ? "utanför vald period" : "räknas bara för tåg till eller från Stockholm"];
+  const note = jc.total === 0 ? "ingen kostnad"
+    : jc.flag === "advance" ? "inställt, känt i förväg"
+    : jc.flag === "capped" ? "sent redan vid avgång, räknas som inställt"
+    : j.status === "cancelled" || j.status === "partial" ? "akut inställt" : "försening under resan";
+  return ["Samhällskostnad", jc.total === 0 ? "0 kr" : `≈ ${fmtKr(jc.total)}`, note];
+}
+
+function worstSegment(j) {
+  return (j.segments ?? []).filter((s) => s.added >= 2).sort((a, b) => b.added - a.added)[0] ?? null;
+}
+
+/** De fyra uppgifterna i Nu-kortet: [rubrik, värde, förklaring]. */
+function nowFacts(j) {
+  const origin = j.origin ?? "", dest = j.destination ?? "";
+  if (!j.stops.length) {
+    return [["Försening", fmtDelay(j.delay), `importerad uppgift (${j.source})`], costFact(j)];
+  }
+  if (j.status === "pending") {
+    if (j.current_delay !== null && j.current_delay !== undefined) {
+      return [
+        ["Avgick", hhmm(j.actual_departure), departureText(j.departure_delay) || origin],
+        ["Senast rapporterat", j.last_station ?? "–", j.current_delay > 0 ? `${j.current_delay} min sent` : "i tid"],
+        ["Beräknad ankomst", hhmm(j.estimated_arrival || j.planned_arrival), `planerat ${hhmm(j.planned_arrival)}`],
+        costFact(j)];
+    }
+    return [
+      ["Planerad avgång", hhmm(j.planned_departure), origin],
+      ["Planerad ankomst", hhmm(j.planned_arrival), dest],
+      j.forecast_delay > 0
+        ? ["Väntad avgång", hhmm(j.estimated_departure), `${fmtDelay(j.forecast_delay)} enligt Trafikverket`]
+        : ["Prognos", "Enligt tidtabell", "enligt Trafikverket"],
+      costFact(j)];
+  }
+  if (j.status === "cancelled") {
+    return [
+      ["Planerad avgång", hhmm(j.planned_departure), origin],
+      ["Planerad ankomst", hhmm(j.planned_arrival), dest],
+      ["Försening", "–", "hela avgången inställd"],
+      costFact(j)];
+  }
+  if (j.status === "partial") {
+    const last = [...j.stops].reverse().find((s) => !s.canceled && s.actual);
+    return [
+      ["Avgick", hhmm(j.actual_departure), departureText(j.departure_delay) || origin],
+      ["Kom till", last ? last.station : "–", last ? `${hhmm(last.actual)}, resten inställd` : "resten inställd"],
+      ["Försening", "–", "kom inte fram"],
+      costFact(j)];
+  }
+  const w = worstSegment(j);
+  return [
+    ["Avgick", hhmm(j.actual_departure), departureText(j.departure_delay) || origin],
+    ["Ankom", hhmm(j.actual_arrival), `planerat ${hhmm(j.planned_arrival)}`],
+    ["Försening", fmtDelay(j.delay), j.delay > 0 && w
+      ? (w.kind === "stop" ? `mest vid uppehållet i ${w.from}` : `mest ${w.from}–${w.to}`)
+      : j.delay > 0 ? "" : "enligt tidtabell"],
+    costFact(j)];
+}
+
+function renderNow() {
+  const j = nowJourney();
+  $("now").hidden = !j;
+  if (!j) return;
+  const isToday = j.date === new Date().toLocaleDateString("sv-SE");
+  const long = fmtDate(j.date, { weekday: "long", day: "numeric", month: "long" });
+  $("now-label").textContent = `${isToday ? `I dag · ${long}` : long.charAt(0).toUpperCase() + long.slice(1)} · tåg ${state.train}`;
+  const h = statusHeadline(j);
+  $("now-status").replaceChildren(el("span", { class: "dot", style: `background:${STATUS[h.key].color}`, "aria-hidden": "true" }),
+    document.createTextNode(h.text));
+  const repeats = /^inställt( tåg)?$/i;
+  $("now-reason").textContent = j.deviations.filter((d) => !(repeats.test(d) && (j.status === "cancelled" || j.status === "partial"))).slice(0, 2).join(", ");
+  $("now-facts").replaceChildren(...nowFacts(j).map(([label, value, note]) => el("div", { class: "fact" },
+    el("dt", { text: label }), el("dd", { class: "fact-value", text: value }), note ? el("dd", { class: "fact-note", text: note }) : null)));
+  const list = state.replayable;
+  const i = list.findIndex((r) => r.date === j.date);
+  $("now-prev").disabled = !list.length || i >= list.length - 1;
+  $("now-next").disabled = !list.length || i === 0;
+  document.querySelector(".now-nav").hidden = !list.length;
+}
+
+/** Bläddra mellan avgångar med hållplatsdata. dir = 1 är en äldre avgång. */
+function stepDay(dir) {
+  const list = state.replayable;
+  if (!list.length) return;
+  const i = list.findIndex((r) => r.date === nowJourney()?.date);
+  const n = i === -1 ? 0 : Math.min(list.length - 1, Math.max(0, i + dir));
+  pickLineDate(list[n].date);
+}
+$("now-prev").addEventListener("click", () => stepDay(1));
+$("now-next").addEventListener("click", () => stepDay(-1));
 
 /** "i tid", "3 min sent" eller "2 min tidigt" för en avgång. */
 function departureText(delay) {
@@ -277,43 +362,58 @@ function forecastText(j) {
 }
 
 /** Kommande avgångar: inställningar och prognoser som Trafikverket redan känner till. */
-function renderUpcoming(upcoming) {
-  const box = $("upcoming");
-  box.hidden = !upcoming.length;
-  if (!upcoming.length) return;
-  const notable = upcoming.filter((j) => j.status === "cancelled" || j.status === "partial" || j.forecast_delay > 0);
-  const last = upcoming[upcoming.length - 1].date;
-  const head = el("strong", { text: "Kommande avgångar" });
-  if (!notable.length) {
-    box.replaceChildren(head, el("span", { class: "detail",
-      text: `Inga kända inställningar eller förseningar t.o.m. ${fmtDate(last, { weekday: "short", day: "numeric", month: "long" })}.` }));
-    return;
-  }
-  const list = el("ul", { class: "upcoming-list" }, ...notable.map((j) => {
-    const what = j.status === "cancelled" ? "Hela avgången är inställd."
-      : j.status === "partial" ? "Delar av sträckan är inställda."
-      : forecastText(j);
-    const why = j.deviations.length ? ` ${j.deviations.slice(0, 2).join(", ")}.` : "";
-    return el("li", {},
-      el("span", { class: "upcoming-date", text: fmtDate(j.date, { weekday: "short", day: "numeric", month: "short" }) }),
-      statusBadge(j.status === "pending" ? "delayed" : j.status, j.status === "pending" ? "Väntas bli försenat" : null),
-      el("span", { class: "detail", text: what + why }));
-  }));
-  box.replaceChildren(head, list);
+function upcomingKind(j) {
+  return j.status === "cancelled" ? "cancelled" : j.status === "partial" ? "partial" : j.forecast_delay > 0 ? "delayed" : null;
 }
 
-function renderKpis(s, threshold) {
-  const share = (n) => (s.journeys ? `${nf((100 * n) / s.journeys, 1)} % av avgångarna` : "");
+/** Kommande dagar: en rad med dagar, text bara för dagar med kända störningar. */
+function renderUpcoming(upcoming) {
+  const days = upcoming.slice(0, 7);
+  $("upcoming").hidden = !days.length;
+  if (!days.length) return;
+  const what = (j) => j.status === "cancelled" ? "inställt" : j.status === "partial" ? "delvis inställt"
+    : `väntas bli ${j.forecast_delay} min sent (avgång ${hhmm(j.estimated_departure)})`;
+  $("upcoming-days").replaceChildren(...days.map((j) => {
+    const k = upcomingKind(j);
+    const label = `${fmtDate(j.date, { weekday: "long", day: "numeric", month: "long" })}: ${k ? what(j) : "inga kända störningar"}`;
+    return el("li", { class: "uday" + (k ? " issue" : ""), title: label },
+      el("span", { class: "uday-name", text: fmtDate(j.date, { weekday: "short" }) }),
+      el("span", { class: "uday-num", text: fmtDate(j.date, { day: "numeric" }) }),
+      el("span", { class: "dot" + (k ? "" : " hollow"), style: k ? `background:${STATUS[k].color}` : null, role: "img", "aria-label": label }));
+  }));
+  const notable = upcoming.filter(upcomingKind);
+  const last = upcoming[upcoming.length - 1].date;
+  $("upcoming-notes").replaceChildren(...(notable.length
+    ? notable.map((j) => el("li", {},
+        el("strong", { text: `${fmtDate(j.date, { weekday: "long", day: "numeric", month: "long" })}: ` }),
+        document.createTextNode(what(j) + (j.deviations.length ? ` – ${j.deviations.slice(0, 2).join(", ")}` : "") + ".")))
+    : [el("li", { class: "quiet", text: `Inga kända inställningar eller förseningar t.o.m. ${fmtDate(last, { weekday: "short", day: "numeric", month: "long" })}.` })]));
+}
+
+function renderKpis(s, threshold, cost) {
   $("kpi-punct").textContent = s.punctuality === null ? "–" : `${nf(s.punctuality, s.punctuality % 1 ? 1 : 0)} %`;
-  $("kpi-punct-note").textContent = `Högst ${threshold} min sent till slutstationen. Inställda tåg räknas som ej i tid.`;
-  $("kpi-count").textContent = nf(s.journeys);
-  $("kpi-count-note").textContent = `${nf(s.ontime)} i tid`;
-  $("kpi-delayed").textContent = nf(s.delayed);
-  $("kpi-delayed-note").textContent = share(s.delayed);
+  $("kpi-punct-note").textContent = s.journeys ? `${nf(s.ontime)} av ${nf(s.journeys)} i tid (högst ${threshold} min sent)` : "";
   $("kpi-cancelled").textContent = nf(s.cancelled + s.partial);
-  $("kpi-cancelled-note").textContent = s.partial ? `varav ${nf(s.partial)} delvis` : share(s.cancelled);
+  $("kpi-cancelled-note").textContent = s.partial ? `varav ${nf(s.partial)} delvis`
+    : s.journeys ? `${nf((100 * s.cancelled) / s.journeys, 1)} % av avgångarna` : "";
   $("kpi-avg").textContent = s.avg_delay === null ? "–" : `${nf(s.avg_delay, 1)} min`;
-  $("kpi-avg-note").textContent = s.max_delay === null ? "" : `Störst: ${fmtDelay(s.max_delay)} (${fmtDate(s.max_delay_date)})`;
+  $("kpi-avg-note").textContent = s.max_delay === null ? "" : `störst ${fmtDelay(s.max_delay)} (${fmtDate(s.max_delay_date)})`;
+  const has = cost && cost.journeys;
+  $("kpi-cost").textContent = has ? fmtKr(cost.total) : "–";
+  $("kpi-cost-note").textContent = has ? `spann ${fmtKr(cost.low)} – ${fmtKr(cost.high)}` : "räknas bara för tåg till eller från Stockholm";
+  $("kpi-cost-tile").disabled = !has;
+}
+
+function overviewSummary(d) {
+  const s = d.summary, t = d.train, c = d.cost;
+  const span = d.days ? `De senaste ${d.days} dagarna` : t.first_date ? `Sedan ${longDate(t.first_date)}` : "Hittills";
+  const parts = [`${span} kom tåg ${t.ident} fram i tid ${nf(s.ontime)} gånger av ${nf(s.journeys)}.`];
+  if (s.cancelled + s.partial) parts.push(`${nf(s.cancelled + s.partial)} avgångar ställdes helt eller delvis in.`);
+  if (c && c.journeys && c.total) {
+    const top = KIND_ORDER.reduce((a, b) => (c.kinds[b] > c.kinds[a] ? b : a));
+    parts.push(`Förseningarna och inställningarna har kostat samhället omkring ${fmtKr(c.total)}, mest genom ${c.kind_labels[top].toLowerCase()}.`);
+  }
+  return parts.join(" ");
 }
 
 function renderSplit(s) {
@@ -404,7 +504,7 @@ function renderStations(stations) {
 
 function stopsRow(j) {
   if (!j.stops.length) {
-    return el("tr", { class: "stops" }, el("td", { colspan: 7, text: `Importerad uppgift (${j.source}) – stationsdetaljer saknas.` }));
+    return el("tr", { class: "stops" }, el("td", { colspan: 6, text: `Importerad uppgift (${j.source}) – stationsdetaljer saknas.` }));
   }
   const body = el("tbody");
   for (const s of j.stops) {
@@ -420,27 +520,46 @@ function stopsRow(j) {
     el("thead", {}, el("tr", {}, ...["Station", "", "Planerad", "Verklig", "Avvikelse", ""].map((h, i) => el("th", { class: i >= 2 && i <= 4 ? "num" : "", text: h })))),
     body);
   const show = j.points.length > 1
-    ? el("button", { type: "button", class: "show-line", text: "Visa på linjen ↑", onclick: (e) => { e.stopPropagation(); showOnLine(j.date); } })
+    ? el("button", { type: "button", class: "show-line", text: "Visa överst ↑", onclick: (e) => { e.stopPropagation(); showOnLine(j.date); } })
     : null;
-  return el("tr", { class: "stops" }, el("td", { colspan: 7 }, show, table));
+  return el("tr", { class: "stops" }, el("td", { colspan: 6 }, show, table));
 }
 
 const PAGE = 30;
+/** Avgångarna i tabellen efter valt urval och sortering. */
+function tableRows(journeys) {
+  let rows = journeys;
+  if (state.filter === "issues") rows = rows.filter((j) => ["delayed", "partial", "cancelled"].includes(j.status));
+  const costOf = (j) => state.data?.cost?.by_date?.[j.date] ?? -1;
+  const delayOf = (j) => (j.status === "cancelled" || j.status === "partial" ? 1e6 : j.delay ?? -1e6);
+  if (state.sort === "cost") rows = [...rows].sort((a, b) => costOf(b) - costOf(a));
+  else if (state.sort === "delay") rows = [...rows].sort((a, b) => delayOf(b) - delayOf(a));
+  return rows;
+}
+
+function renderTableTools() {
+  for (const b of document.querySelectorAll("[data-filter]")) b.setAttribute("aria-pressed", String(b.dataset.filter === state.filter));
+  for (const b of document.querySelectorAll("[data-sort]")) b.setAttribute("aria-pressed", String(b.dataset.sort === state.sort));
+}
+
 function renderTable(journeys, limit = PAGE) {
+  renderTableTools();
   const body = document.querySelector("#journeys tbody");
   body.replaceChildren();
   const more = $("more");
   more.hidden = journeys.length <= limit;
   more.textContent = `Visa fler (${journeys.length - limit} till)`;
   more.onclick = () => renderTable(journeys, limit + 60);
-  journeys = journeys.slice(0, limit);
-  if (!journeys.length) body.append(el("tr", {}, el("td", { colspan: 7, text: "Inga avgångar i perioden ännu." })));
-  for (const j of journeys) {
+  const shown = journeys.slice(0, limit);
+  if (!shown.length) {
+    body.append(el("tr", {}, el("td", { colspan: 6, text: state.filter === "issues" ? "Inga störningar i perioden." : "Inga avgångar i perioden ännu." })));
+  }
+  for (const j of shown) {
     const row = el("tr", { class: "journey", tabindex: 0, "aria-expanded": "false" },
       el("td", { text: fmtLongDate(j.date) }),
-      el("td", {}, statusBadge(j.status, j.status === "pending" && j.current_delay !== null ? "På väg" : undefined)),
-      el("td", { class: "num", text: hhmm(j.planned_arrival) }),
-      el("td", { class: "num", text: hhmm(j.actual_arrival) }),
+      el("td", {}, statusBadge(j.status, j.status === "pending" && j.current_delay !== null ? "På väg"
+        : state.data?.cost?.flags?.[j.date] === "advance" ? `${STATUS[j.status].label} i förväg` : undefined)),
+      el("td", { class: "num", text: j.status === "cancelled" ? "–" : hhmm(j.actual_arrival) }),
       el("td", { class: "num", text: fmtDelay(j.delay) }),
       el("td", { class: "num cost-col", text: costCell(j.date) }),
       el("td", { class: "dev", text: j.deviations.join(", ") }));
@@ -453,6 +572,13 @@ function renderTable(journeys, limit = PAGE) {
     row.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
     body.append(row);
   }
+}
+
+for (const b of document.querySelectorAll("[data-filter]")) {
+  b.addEventListener("click", () => { state.filter = b.dataset.filter; if (state.data) renderTable(tableRows(state.data.journeys)); });
+}
+for (const b of document.querySelectorAll("[data-sort]")) {
+  b.addEventListener("click", () => { state.sort = b.dataset.sort; if (state.data) renderTable(tableRows(state.data.journeys)); });
 }
 
 
@@ -478,21 +604,6 @@ function journeyCost(j) {
   if (c?.by_date?.[j.date] !== undefined) return { total: c.by_date[j.date], flag: c.flags?.[j.date] ?? null };
   if (j.cost) return { total: j.cost.total, flag: j.cost.advance ? "advance" : j.cost.capped ? "capped" : null };
   return null;
-}
-
-/** Kort text om kostnaden, med en knapp som öppnar förklaringen. */
-function costLine(j, cls) {
-  const jc = journeyCost(j);
-  if (!jc || !jc.total) return null;
-  const what = j.status === "cancelled" || j.status === "partial"
-    ? (jc.flag === "advance" ? "Inställningen var känd i förväg och" : "Inställningen")
-    : "Förseningen";
-  const text = `${what} kostade samhället ungefär ${fmtKr(jc.total)}` +
-    (jc.flag === "capped" ? " (tåget var sent redan vid avgång och räknas som ett inställt tåg)." : ".");
-  return el("span", { class: cls },
-    el("span", { class: "cost-chip-label", text: "Samhällskostnad" }),
-    document.createTextNode(` ${text} `),
-    el("button", { type: "button", class: "link-btn", text: "Så räknar vi", onclick: openCostInfo }));
 }
 
 function costCell(date) {
@@ -552,38 +663,41 @@ function renderCostChart() {
 }
 
 function renderCost() {
-  const card = $("cost-card");
   const c = state.data.cost;
-  card.hidden = !c || !c.journeys;
-  if (card.hidden) return;
+  const has = c && c.journeys;
+  $("cost-body").hidden = !has;
+  $("cost-none").hidden = !!has;
+  if (!has) {
+    $("cost-sub").textContent = "";
+    $("cost-none").textContent = c ? "Inga avslutade avgångar i den valda perioden ännu."
+      : "Samhällskostnaden räknas bara för tåg till eller från Stockholm.";
+    return;
+  }
   const dir = c.profile === "out" ? "utresa till Stockholm" : "hemresa från Stockholm";
-  $("cost-sub").textContent = `Ungefärlig kostnad för samhället av förseningar och inställda avgångar, räknad som ${dir} med ${nf(c.passengers)} resenärer per avgång. ` +
+  $("cost-sub").textContent = `Ungefärlig kostnad för samhället, räknad som ${dir} med ${nf(c.passengers)} resenärer per avgång. ` +
     "Förväntade värden enligt schabloner – en enskild avgång kan kosta mer eller mindre.";
   $("cost-total").textContent = fmtKr(c.total);
-  $("cost-range").textContent = `Spann ${fmtKr(c.low)} – ${fmtKr(c.high)} (lågt och högt scenario)`;
+  $("cost-range").textContent = `spann ${fmtKr(c.low)} – ${fmtKr(c.high)}`;
   $("cost-avg").textContent = fmtKr(c.per_journey);
   $("cost-avg-note").textContent = `${nf(c.journeys)} avslutade avgångar`;
-  const s = state.data.summary;
-  const nCancel = s.cancelled + s.partial;
-  const cancelCost = c.by_status.cancelled + c.by_status.partial;
-  const delayCost = c.by_status.delayed + c.by_status.ontime;
-  const share = (v) => (c.total ? `${nf((100 * v) / c.total)} % av kostnaden` : "");
-  $("cost-cancel").textContent = fmtKr(cancelCost);
-  $("cost-cancel-note").textContent = `${nf(nCancel)} avgångar · ${share(cancelCost)}`;
-  $("cost-delay").textContent = fmtKr(delayCost);
-  $("cost-delay-note").textContent = `${nf(s.delayed)} avgångar · ${share(delayCost)}`;
   $("cost-hidden-tile").hidden = c.hidden === null;
   if (c.hidden !== null) {
     $("cost-hidden").textContent = fmtKr(c.hidden);
     $("cost-hidden-note").textContent = `${nf(c.hidden_per_day)} resenärer per avgång åker kvällen före för säkerhets skull. Ingår inte i summan.`;
   }
+  const s = state.data.summary;
+  const cancelCost = c.by_status.cancelled + c.by_status.partial;
+  const delayCost = c.by_status.delayed + c.by_status.ontime;
+  const pctOf = (v) => (c.total ? `${nf((100 * v) / c.total)} %` : "–");
+  $("cost-split").textContent = `Inställda avgångar (${nf(s.cancelled + s.partial)} st) kostade ${fmtKr(cancelCost)}, ${pctOf(cancelCost)} av summan. ` +
+    `Försenade avgångar (${nf(s.delayed)} st) kostade ${fmtKr(delayCost)}, ${pctOf(delayCost)}.`;
 
   const labels = c.kind_labels;
   const used = KIND_ORDER.filter((k) => c.kinds[k] > 0);
   $("cost-period-title").textContent = c.period === "week" ? "Kostnad per vecka" : "Kostnad per månad";
   $("cost-legend").replaceChildren(...used.map((k) => el("span", {},
     el("span", { class: "swatch", style: `background:${KIND_COLORS[k]}` }), document.createTextNode(labels[k]))));
-  renderCostChart();
+  if (state.tab === "cost") renderCostChart();
 
   const kinds = el("div", { class: "stations cost-kinds" });
   const maxKind = Math.max(1, ...KIND_ORDER.map((k) => c.kinds[k]));
@@ -594,14 +708,6 @@ function renderCost() {
       el("div", { class: "val", text: fmtKr(c.kinds[k]) }));
   }
   $("cost-kinds").replaceChildren(kinds);
-
-  $("cost-top").replaceChildren(c.top.length
-    ? el("table", { class: "cost-top" }, el("tbody", {}, ...c.top.map((r) => el("tr", {},
-        el("td", { text: fmtLongDate(r.date) }),
-        el("td", {}, statusBadge(r.status, r.advance ? `${STATUS[r.status].label} i förväg`
-          : r.status === "delayed" ? fmtDelay(r.delay) + (r.capped ? " (känt vid avgång)" : "") : undefined)),
-        el("td", { class: "num", text: fmtKr(r.total) })))))
-    : el("p", { class: "sub", text: "Inga avgångar med kostnad i perioden." }));
 
   const notes = [];
   if (c.advance_days) notes.push(`${nf(c.advance_days)} inställda avgångar var kända i förväg och räknas lägre än akuta inställningar.`);
@@ -972,7 +1078,7 @@ async function pickLineDate(date) {
       if (state.train === train) showMessage(e.message);
     }
   }
-  if (state.train === train && state.lineDate === date && !linePlay) renderLine();
+  if (state.train === train && state.lineDate === date && !linePlay) { renderNow(); renderLine(); }
 }
 
 $("line-date").addEventListener("change", (e) => pickLineDate(e.target.value));
@@ -1128,8 +1234,8 @@ function renderLine() {
       gapText.setAttribute("y", tagY - 5);
       gapText.textContent = `+${minutes} min`;
     }
-    sign.style.display = stopped || fullyCanceled ? "" : "none";
-    if (stopped || fullyCanceled) {
+    sign.style.display = stopped && !fullyCanceled ? "" : "none";
+    if (stopped && !fullyCanceled) {
       signText.textContent = fullyCanceled ? "INSTÄLLT" : `INSTÄLLT EFTER ${points[real.stoppedAt].station.toUpperCase()}`;
       const w = signText.textContent.length * 7 + 16;
       const sx = Math.min(Math.max(r.x - 24 * scale, m.l - 30 + w / 2), width - w / 2 - 2);
@@ -1145,11 +1251,7 @@ function renderLine() {
   }
 
   const r = update(defaultT, false);
-  $("line-title").textContent = `Linjen · ${fmtLongDate(j.date)}`;
-  const lc = FINISHED.includes(j.status) ? costLine(j, "") : null;
-  $("line-cost").hidden = !lc;
-  $("line-cost").replaceChildren(...(lc ? lc.childNodes : []));
-  $("line-sub").textContent = lineStatusText(j, points, fullyCanceled || j.status === "pending" ? r : positionAt(real, arrival, xOf), real);
+  root.setAttribute("aria-label", lineStatusText(j, points, fullyCanceled || j.status === "pending" ? r : positionAt(real, arrival, xOf), real));
   $("line-play").onclick = () => {
     if (linePlay) { stopPlay(); update(defaultT, false); return; }
     const duration = 8000, began = performance.now();
@@ -1163,17 +1265,13 @@ function renderLine() {
     linePlay = { raf: requestAnimationFrame(step) };
   };
 
-  const legend = [
-    ["var(--rail)", "Ingen ny försening"], ["var(--warning)", "+2–4 min"], ["var(--serious)", "+5 min eller mer"],
-    ["var(--critical)", "Inställd sträcka"], ["var(--neutral)", "Ej körd ännu"],
-  ].filter(([c]) => c !== "var(--neutral)" || j.status === "pending");
+  const legend = [["var(--warning)", "Förseningen ökade 2–4 min"], ["var(--serious)", "Ökade 5 min eller mer"], ["var(--critical)", "Inställt"]];
+  if (j.status === "pending") legend.push(["var(--neutral)", "Ej körd ännu"]);
   $("line-legend").replaceChildren(
     ...legend.map(([c, t]) => el("span", {}, el("span", { class: "swatch", style: `background:${c}` }), document.createTextNode(t))),
-    el("span", {}, el("span", { class: "rail-key double" }), document.createTextNode("Dubbelspår")),
-    el("span", {}, el("span", { class: "rail-key single" }), document.createTextNode("Enkelspår")),
-    el("span", {}, el("span", { class: "rail-key unknown" }), document.createTextNode("Okänt")),
     el("span", {}, el("span", { class: "ghost-key" }), document.createTextNode("Enligt tidtabell")));
-  renderDelayDetails(j);
+  $("delay-details").hidden = fullyCanceled;
+  if (!fullyCanceled) renderDelayDetails(j);
 }
 
 function nearestStation(points, index) {
@@ -1248,7 +1346,8 @@ function renderDelayDetails(j) {
   const note = el("p", { class: "sub details-note" });
   note.append(document.createTextNode(
     `Tillkommet = hur mycket förseningen ökade på sträckan eller under uppehållet (negativt = tåget tog igen tid). ` +
-    `Delsträckorna går mellan alla platser där Trafikverket rapporterar tåget, även sådana utan resandeutbyte. `));
+    `Delsträckorna går mellan alla platser där Trafikverket rapporterar tåget, även sådana utan resandeutbyte. ` +
+    `På linjen betyder dubbla räler dubbelspår, en räl enkelspår och streckad okänt. `));
   if (hiddenCount || showAll) {
     note.append(el("button", { type: "button", class: "link-btn", text: showAll ? "Visa bara ändringar" : `Visa alla ${merged.length} delsträckor`,
       onclick: () => { body.dataset.all = showAll ? "" : "1"; renderDelayDetails(j); } }));
@@ -1260,7 +1359,7 @@ function renderDelayDetails(j) {
 function showOnLine(date) {
   pickLineDate(date);
   $("delay-details").open = true;
-  $("line-card").scrollIntoView({ behavior: "smooth", block: "start" });
+  $("now").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function renderSync(d) {
@@ -1276,40 +1375,76 @@ function renderSync(d) {
   $("foot").textContent = `Tågkoll ${d.version === "dev" ? "(utvecklingsversion)" : "v" + d.version}. Trafikverket tillfrågas var ${Math.round(d.poll_seconds / 60)}:e minut. Ett tåg räknas som försenat när det ankommer slutstationen mer än ${d.threshold} minuter efter tidtabell.`;
 }
 
-function renderCharts() {
-  const d = state.data;
-  if (!d || !d.summary.journeys) return;
-  renderSplit(d.summary);
-  renderDaily(d.journeys, d.threshold);
-  renderWeekly(d.weeks);
-  renderWeekday(d.weekdays);
-  renderStations(d.stations);
-  if (d.cost && d.cost.journeys) renderCostChart();
+// ------------------------------------------------------------------- flikar
+const TABS = ["overview", "punct", "cost", "table"];
+
+function setTab(tab) {
+  if (!TABS.includes(tab)) tab = "overview";
+  state.tab = tab;
+  try { localStorage.setItem("tab", tab); } catch { /* bara en bekvämlighet */ }
+  if (location.hash !== `#${tab}`) history.replaceState(null, "", `#${tab}`);
+  const has = Boolean(state.data?.summary.journeys);
+  for (const t of TABS) {
+    const on = t === tab;
+    const b = $(`tab-${t}`);
+    b.setAttribute("aria-selected", String(on));
+    b.tabIndex = on ? 0 : -1;
+    // Kostnad och Avgångar visas även utan avslutade avgångar (de har egna tomma lägen).
+    $(`panel-${t}`).hidden = !on || (!has && (t === "overview" || t === "punct"));
+  }
+  $("empty").hidden = has || !(tab === "overview" || tab === "punct");
+  renderTabCharts();
 }
+
+/** Diagram ritas bara i den synliga fliken – i en dold flik har de ingen bredd. */
+function renderTabCharts() {
+  const d = state.data;
+  if (!d) return;
+  if (d.summary.journeys && state.tab === "overview") renderDaily(d.journeys, d.threshold);
+  if (d.summary.journeys && state.tab === "punct") {
+    renderSplit(d.summary);
+    renderWeekly(d.weeks);
+    renderWeekday(d.weekdays);
+    renderStations(d.stations);
+  }
+  if (state.tab === "cost" && d.cost && d.cost.journeys) renderCostChart();
+}
+
+const tabList = $("tabs");
+tabList.addEventListener("click", (e) => { const b = e.target.closest("[data-tab]"); if (b) setTab(b.dataset.tab); });
+tabList.addEventListener("keydown", (e) => {
+  const i = TABS.indexOf(state.tab);
+  const next = e.key === "ArrowRight" ? (i + 1) % TABS.length : e.key === "ArrowLeft" ? (i + TABS.length - 1) % TABS.length
+    : e.key === "Home" ? 0 : e.key === "End" ? TABS.length - 1 : null;
+  if (next === null) return;
+  e.preventDefault();
+  setTab(TABS[next]);
+  $(`tab-${TABS[next]}`).focus();
+});
+window.addEventListener("hashchange", () => { const t = location.hash.replace("#", ""); if (TABS.includes(t) && t !== state.tab) setTab(t); });
+$("kpi-cost-tile").addEventListener("click", () => { setTab("cost"); document.querySelector(".tabbar").scrollIntoView({ behavior: "smooth", block: "start" }); });
 
 function render() {
   const d = state.data;
   const t = d.train;
   $("content").hidden = false;
-  $("train-title").textContent = `Tåg ${t.ident}` + (t.origin ? ` · ${t.origin} → ${t.destination}` : "");
-  $("train-sub").textContent = [t.product, t.operator && t.operator !== t.product ? t.operator : null].filter(Boolean).join(" · ");
-  $("train-age").textContent = ageText(t);
+  const product = [t.product, t.operator && t.operator !== t.product ? t.operator : null].filter(Boolean).join(", ");
+  $("about").textContent = [`Tåg ${t.ident}${t.origin ? ` ${t.origin} → ${t.destination}` : ""}${product ? ` (${product})` : ""}.`, ageText(t)]
+    .filter(Boolean).join(" ");
   renderSync(d);
-  renderToday(d.journeys);
+  renderNow();
   renderUpcoming(d.upcoming ?? []);
   renderLine();
-  renderKpis(d.summary, d.threshold);
-  const has = d.summary.journeys > 0;
-  $("charts").hidden = !has;
-  $("empty").hidden = has;
-  if (!has) {
+  renderKpis(d.summary, d.threshold, d.cost);
+  $("overview-summary").textContent = d.summary.journeys ? overviewSummary(d) : "";
+  if (!d.summary.journeys) {
     $("empty").textContent = d.journeys.length
       ? "Inga avslutade avgångar i den valda perioden ännu. Statistiken fylls på efter varje avgång."
       : "Trafikverket har inga uppgifter om det här tågnumret just nu. Kontrollera numret – bevakningen fortsätter och data dyker upp när tåget går.";
   }
-  renderCharts();
   renderCost();
-  renderTable(d.journeys);
+  renderTable(tableRows(d.journeys));
+  setTab(state.tab);
 }
 
 // ------------------------------------------------------------------ actions
@@ -1319,8 +1454,7 @@ async function loadStats() {
     showMessage("Inga tåg bevakas. Lägg till tåg på adminsidan /admin för att börja samla data.", true);
     return;
   }
-  $("charts").classList.add("loading");
-  document.querySelector(".kpis").classList.add("loading");
+  $("content").classList.add("loading");
   try {
     const q = new URLSearchParams({ train: state.train });
     if (state.days) q.set("days", state.days);
@@ -1332,8 +1466,7 @@ async function loadStats() {
     state.replayable = replayable;
     render();
   } finally {
-    $("charts").classList.remove("loading");
-    document.querySelector(".kpis").classList.remove("loading");
+    $("content").classList.remove("loading");
   }
 }
 
@@ -1366,7 +1499,7 @@ let resizeTimer;
 new ResizeObserver(() => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
-    renderCharts();
+    renderTabCharts();
     renderLine();
     if (costModel && $("cost-info").open) curveChart(document.querySelector(".info-curve"), costModel.explain);
   }, 120);

@@ -33,10 +33,25 @@ och överlever omstarter och ombyggen.
   klistra in rader. En rad per dag:
   `datum;försening_min;inställt`. Importerade dagar används bara där egna data saknas.
 
+## Dashboarden
+
+Överst väljer du tåg. Under det visar **Nu-kortet** en avgång i taget: status, avgång, ankomst,
+försening och samhällskostnad, linjen och kommande dagars kända störningar. Pilarna och listan
+bläddrar mellan alla insamlade avgångar.
+
+Historiken ligger under fyra flikar, med periodvalet på samma rad:
+
+- **Översikt:** punktlighet, inställda, medelförsening, samhällskostnad och försening per avgång.
+- **Punktlighet:** utfall, per vecka, per veckodag och per station.
+- **Kostnad:** samhällskostnaden i perioden, över tid och per kostnadsslag.
+- **Avgångar:** tabellen, med urval (bara störningar) och sortering (senaste, störst försening, dyrast).
+
+Vald flik sparas i webbläsaren och i adressen (`#overview`, `#punct`, `#cost`, `#table`), så att
+en länk kan gå direkt till en flik.
+
 ## Linjen
 
-Dashboarden visar den senaste avgången (eller den som väljs med *Visa på linjen* i tabellen)
-som en linje från start till mål. Ångloket är tåget, det streckade loket är var tåget skulle ha
+Nu-kortet visar avgången som en linje från start till mål. Ångloket är tåget, det streckade loket är var tåget skulle ha
 varit enligt tidtabellen. Avståndet längs linjen motsvarar planerad restid, eftersom Trafikverket
 inte anger kilometer.
 
@@ -49,12 +64,12 @@ inte anger kilometer.
 
 ## Samhällskostnad
 
-Kortet *Samhällskostnad* visar en ungefärlig kostnad för samhället av förseningar och inställda
+Fliken *Kostnad* visar en ungefärlig kostnad för samhället av förseningar och inställda
 avgångar: summa och spann för vald period, uppdelning per slag (förlorad tid, missade möten,
-dagen efter och familj, hotellnätter, andra resor, ersättningstrafik), kostnad per vecka eller
-månad och de dyraste avgångarna. Tabellen
-över avgångar har en kolumn med kostnaden per avgång. För morgontåget visas också en dold kostnad
-(resor kvällen före) separat från summan.
+dagen efter och familj, hotellnätter, andra resor, ersättningstrafik) och kostnad per vecka eller
+månad. Nu-kortet visar kostnaden för den valda avgången, och tabellen under *Avgångar* kan
+sorteras på kostnad. För morgontåget visas också en dold kostnad (resor kvällen före) separat
+från summan.
 
 - Resenärerna räknas utifrån antal platser och beläggning, uppdelade på konsulter, offentlig
   sektor och övriga med egna timvärden.
