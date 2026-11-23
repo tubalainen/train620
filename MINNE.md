@@ -249,8 +249,9 @@ Användarens slutliga besked (efter flera rundor 2.1.2–2.1.5):
 - Det är okänt varför en bit efter Degerfors visades som "okänt" i 2.1.0 (troligen ett
   stationsnamn som inte matchade). 2.1.2 och senare täcker det med tolerantare namn och
   knutpunktsregeln.
-- *Security* är grön sedan 2.3.1. Kontrollera att nattkörningen 04:17 UTC faktiskt sker (den
-  uteblev före 2.3.0).
+- *Security* är grön sedan 2.3.1. Nattkörningen sker varje dag (kontrollerat 2026-11-23: körning
+  #12–#17, 18–23 nov, alla gröna, Trivy 0 fynd i `latest`, pip-audit inga fynd, CodeQL grön).
+  GitHub startar den schemalagda körningen sent, kring 12–15 UTC i stället för 04:17 – ofarligt.
 - Vid en framtida Python-uppgradering: gör Dockerfile:s ensurepip-sökväg versionsoberoende.
 - Rekommenderat till användaren (görs i Cloudflare, inte i koden): Cloudflare Access för
   `/admin*` och `/api/admin*`, och en Rate Limiting-regel för `/api/*`. Ej bekräftat gjort.
