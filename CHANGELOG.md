@@ -2,6 +2,11 @@
 
 Varje release får ett avsnitt `## [x.y.z] - ÅÅÅÅ-MM-DD`. Avsnittet blir releasetexten på GitHub.
 
+## [3.0.1] - 2026-11-24
+
+- Uppdaterade programbibliotek: FastAPI 0.165.0 och Pydantic 2.14.4. Inga ändringar i hur appen fungerar.
+- Operativsystemets säkerhetsuppdateringar kommer nu alltid med i nya releaser. Tidigare återanvände bygget ett sparat steg från 17 november, så 3.0.0 saknade senare rättningar i `libc` (26 medelallvarliga och 2 lindriga brister enligt Trivy). 3.0.1 bygger på Debian 13.8 och har inga kända säkerhetshål.
+
 ## [3.0.0] - 2026-11-18
 
 Ny utformning av hela dashboarden. Alla funktioner finns kvar, men de ligger på nya platser och sägs bara en gång. Ingen manuell åtgärd behövs vid uppgradering.
