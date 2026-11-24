@@ -3,7 +3,7 @@
 Överlämning mellan chattsessioner. Läs den här filen och `CLAUDE.md` först i en ny session,
 och uppdatera filen när något viktigt ändras (direkt till `main`, utan PR och release).
 
-*Senast uppdaterad: 2026-11-24, inför v3.0.1 (beroenden).*
+*Senast uppdaterad: 2026-11-24, efter release v3.0.1.*
 
 ## Vad Tågkoll är
 
@@ -110,7 +110,10 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
 
 ## Releaser
 
-- **v3.0.1**: FastAPI 0.163.1→0.165.0, Pydantic 2.14.3→2.14.4 (från Dependabot #32, som stängdes
+- **v3.0.1** (2026-11-24), släppt och kontrollerad (PR #33, Release-körning 45376948546 grön –
+  första releasen med Actions från Dependabot #20/#31 och utan byggcache). `docker pull` av
+  `3.0.1` och `latest` utan inloggning: samma digest sha256:066b068e1c3a…, Debian 13.8, Trivy
+  0 sårbarheter på alla nivåer, Security efter releasen grön. Inga öppna PR:er. FastAPI 0.163.1→0.165.0, Pydantic 2.14.3→2.14.4 (från Dependabot #32, som stängdes
   till förmån för en egen release-PR med versionshöjning). Dependabot #31 (codeql-action
   v4.39.4) mergad utan release. Lokalt: pip check och pip-audit rena, säkerhetstesterna
   oförändrade, röktest av 620 och 643 i alla flikar utan fel.
@@ -260,6 +263,8 @@ Användarens slutliga besked (efter flera rundor 2.1.2–2.1.5):
 - *Security* är grön sedan 2.3.1. Nattkörningen sker varje dag (kontrollerat 2026-11-23: körning
   #12–#17, 18–23 nov, alla gröna, Trivy 0 fynd i `latest`, pip-audit inga fynd, CodeQL grön).
   GitHub startar den schemalagda körningen sent, kring 12–15 UTC i stället för 04:17 – ofarligt.
+  Obs: Security larmar bara på HIGH/CRITICAL. MEDIUM/LOW i OS-paket syns inte där; de tas om
+  hand av att varje release nu byggs utan cache (`apt-get upgrade` körs på riktigt).
 - Vid en framtida Python-uppgradering: gör Dockerfile:s ensurepip-sökväg versionsoberoende.
 - Rekommenderat till användaren (görs i Cloudflare, inte i koden): Cloudflare Access för
   `/admin*` och `/api/admin*`, och en Rate Limiting-regel för `/api/*`. Ej bekräftat gjort.
