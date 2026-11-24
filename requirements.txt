@@ -1,8 +1,8 @@
 # Direkta beroenden och de viktigaste indirekta, låsta till kända versioner.
 # Dependabot föreslår uppdateringar och Security-arbetsflödet granskar dem dagligen.
-fastapi==0.163.1
+fastapi==0.165.0
 starlette==1.10.0
-pydantic==2.14.3
+pydantic==2.14.4
 uvicorn==0.54.0
 h11==0.16.0
 anyio==4.16.0
