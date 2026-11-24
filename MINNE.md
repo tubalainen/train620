@@ -3,7 +3,7 @@
 Överlämning mellan chattsessioner. Läs den här filen och `CLAUDE.md` först i en ny session,
 och uppdatera filen när något viktigt ändras (direkt till `main`, utan PR och release).
 
-*Senast uppdaterad: 2026-11-18, efter release v3.0.0.*
+*Senast uppdaterad: 2026-11-24, inför v3.0.1 (beroenden).*
 
 ## Vad Tågkoll är
 
@@ -110,6 +110,14 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
 
 ## Releaser
 
+- **v3.0.1**: FastAPI 0.163.1→0.165.0, Pydantic 2.14.3→2.14.4 (från Dependabot #32, som stängdes
+  till förmån för en egen release-PR med versionshöjning). Dependabot #31 (codeql-action
+  v4.39.4) mergad utan release. Lokalt: pip check och pip-audit rena, säkerhetstesterna
+  oförändrade, röktest av 620 och 643 i alla flikar utan fel.
+  **Viktigt fynd:** Release byggde med `cache-from: type=gha`, så lagret med `apt-get upgrade`
+  återanvändes (från 17 nov) och 3.0.0 hade 28 MEDIUM/LOW i libc6 (Security larmar bara
+  HIGH/CRITICAL). Release bygger nu med `no-cache: true` och `pull: true`. Lokalt utan cache:
+  Debian 13.8, Trivy 0 på alla nivåer.
 - **v3.0.0** (2026-11-18), släppt och kontrollerad (PR #30, Release #23, `docker manifest inspect` av
   `3.0.0` och `latest` utan inloggning: samma digest sha256:7de72a74ec5a…): ny utformning av hela
   dashboarden efter användarens kritik ("rörig"). Användaren valde båda målgrupperna lika viktiga,

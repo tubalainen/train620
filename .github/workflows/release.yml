@@ -72,8 +72,10 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Ingen byggcache och alltid senaste basimage: annars återanvänds steget med
+          # `apt-get upgrade` och nya säkerhetsuppdateringar för operativsystemet kommer inte med.
+          no-cache: true
+          pull: true
           # Innehållsförteckning (SBOM) och byggintyg följer med imagen.
           sbom: true
           provenance: mode=max
