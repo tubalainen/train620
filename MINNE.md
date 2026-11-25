@@ -3,7 +3,7 @@
 Överlämning mellan chattsessioner. Läs den här filen och `CLAUDE.md` först i en ny session,
 och uppdatera filen när något viktigt ändras (direkt till `main`, utan PR och release).
 
-*Senast uppdaterad: 2026-11-24, efter release v3.0.1.*
+*Senast uppdaterad: 2026-11-25, efter release v4.0.0.*
 
 ## Vad Tågkoll är
 
@@ -16,22 +16,31 @@ Karlstad C, SJ Snabbtåg) bevakas.
   framtida dagar, som `/api/stats` returnerar i `upcoming` (ingår inte i statistik, tabell,
   linjevy eller uppspelningslistan). Prognos före avgång: `forecast_delay`/`estimated_departure`
   från startstationens `EstimatedTimeAtLocation`.
-- **Dashboard `/`:** äldsta datapunkt per tåg, linjevy (ånglok + spöktåg enligt tidtabell,
-  enkel/dubbelspår, färgade förseningssträckor, uppspelning, väljare för alla avgångar med
-  egna hållplatsdata (`/api/journeys` = lista, `/api/journey?train=&date=` = en avgång), utfällbar "Var uppstod
-  förseningen?"; ett framkommet tåg står vid slutstationen, pågående visas nu-läget,
-  inställda/delvis inställda står kvar där de stannade), punktlighet, försenade/inställda, medelförsening, försening per avgång,
-  vecka, veckodag och station, samt tabell med alla avgångar (utfällbar per station).
+- **Dashboard (4.0.0):** två vyer, styrda av adressen (`parseHash`/`route`):
+  - **Startsidan `/`** (`renderBoard`): *Just nu* med en rad per tåg (`boardRow`, `brief`, litet spår
+    `drawMini`), jämförelse för vald period (`boardStats`, remsa med en stapel per avgång `stripChart`)
+    och kända inställningar framåt. Hämtar `/api/stats` för varje tåg.
+  - **Ett tåg `#620`, en avgång `#620/2026-11-24`:** rubrik + mening (`headline`, `storyText`,
+    `lostText`), linjen och uppgifter (`nowFacts`), historiken (`renderHistory`, `renderDaily` – klick på
+    stapel väljer avgång) och utfällbara avsnitt `sec-punct|where|cost|upcoming|table` med slutsatsen i
+    rubriken (`punctTake`, `whereTake` …; diagram ritas när avsnittet fälls ut, `renderSectionCharts`;
+    utfällda sparas i localStorage `open`). Gamla flikadresser `#overview|#punct|#cost|#table` leder hit.
+  - **Linjen:** gemensam `railScene` (körd sträcka svart, återstående grå, inställd rödprickad, tåget som
+    enkel siluett – grå när det står still –, streckad ring där det borde vara, glappet orange).
+    Bredd ≥ 560 px: **förseningsprofil** `renderProfile` (kurva = minuter sent, enkelspår grå zon, största
+    ökningen med etikett, prognos streckad, uppspelning). Kompakt utan kurva när tider saknas.
+    Smalare: **stationslista** `renderStationList` (ingen uppspelning där). `/api/journeys` = lista,
+    `/api/journey?train=&date=` = en avgång.
+  - Färger: grönt i tid, orange (`--late`) försenat, rött inställt; delvis inställt randigt/snedstreck.
 - **Samhällskostnad (2.6.0):** `app/cost.py` + kort på dashboarden, dialog *Så räknar vi*, kolumn
   *Kostnad* i tabellen, avsnitt *Kostnadsmodell* på `/admin` (tabell `cost_params`, bara ändrade
   värden sparas). Profil efter riktning: slutar i Stockholm = utresa (`out`), börjar där = hemresa
   (`home`), annars ingen kostnad. Modellen beskrivs i `docs/kostnadsmodell.md`.
-- **Utformning 3.0.0:** tågval överst (knappar med sträcka), **Nu-kort** med en avgång i taget
-  (`renderNow`/`nowFacts`/`statusHeadline`, bläddring `stepDay`, kommande dagar som rad), **flikar**
-  Översikt/Punktlighet/Kostnad/Avgångar med periodvalet på flikraden (`setTab`, `renderTabCharts` –
-  diagram ritas bara i synlig flik; hash `#overview|#punct|#cost|#table` + localStorage), tabellen med
-  urval/sortering (`tableRows`). Skissen finns som artifact "Tågkoll 3.0 skiss". Princip: säg varje
-  sak en gång, statusfärger bara för status, kostnadsslag i blå/turkos/lila/rosa/gul/grå.
+- **Utformning 4.0.0:** användaren bad om tre alternativ för en enklare, mer översiktlig sida och ett
+  modernare tåg. Skisserna finns som artifact "Tågkoll – tre designförslag" (A Tavlan, B Resan,
+  C Kalendern + tre tågvarianter). Användaren valde rekommendationen: A som startsida, B för ett tåg,
+  profil på dator och stationslista i mobil. Kalendern (C) är inte byggd – möjlig ersättare för
+  stapelraden senare. Princip som tidigare: säg varje sak en gång, statusfärger bara för status.
 - **Admin `/admin`:** lösenordsskyddad (`ADMIN_PASSWORD`). Lägga till/ta bort tåg, *Uppdatera
   nu*, CSV-import av historik (filval, drag-och-släpp, inklistring) och *Radera allt och börja om*.
 - **Definition:** försenat = mer än 5 min sent till slutstationen. Inställda och delvis
@@ -43,7 +52,7 @@ Karlstad C, SJ Snabbtåg) bevakas.
 |---|---|
 | `app/security.py` | Betrodd proxy (`client_ip`, `is_https`), `RateLimiter`, `SecurityMiddleware` (rubriker, 3 MB-gräns, Origin-kontroll, API-gräns) |
 | `app/main.py` | FastAPI: insamling i bakgrundstråd (var 5:e min), SQLite, statistik, API, admin-inloggning |
-| `app/static/index.html`, `app.js` | Dashboard, egna SVG-diagram utan bibliotek |
+| `app/static/index.html`, `app.js` | Dashboard (startsida + tåg-vy), egna SVG-diagram utan bibliotek |
 | `app/static/admin.html`, `admin.js` | Adminsidan |
 | `app/static/style.css` | Gemensam stil, ljust och mörkt läge |
 | `.github/workflows/build.yml` | Varje PR: bygg, provstart, nyckelkontroll, VERSION ↔ CHANGELOG |
@@ -80,8 +89,14 @@ annars cachar gammal `app.js` efter en uppgradering (det var buggen som rättade
 
 - **totoro går inte att nå** från en molnsession (privat nät). Användaren kör kommandona där
   själv, eller kopplar en dator via Remote Control. Lova inte att testa på totoro.
-- Den publika adressen bakom Cloudflare svarar 403 till molnsessionen; be användaren titta.
-- Docker måste startas för hand: `setsid nohup dockerd > <scratchpad>/dockerd.log 2>&1 &`.
+- Den publika adressen `https://sj.tuben.org/` (bakom Cloudflare) svarar 403 till molnsessionen, även
+  i Playwright/Chromium. Be användaren titta, eller provkör med testdatabas.
+- Docker måste startas för hand: `setsid nohup dockerd > <scratchpad>/dockerd.log 2>&1 &`. Den stannar
+  när sessionens arbetsprocess startas om – starta igen och kontrollera med `docker info`.
+- Testdatabas: ett skript som importerar `app.main`, kör `init_db()` och skriver påhittade rader i
+  `announcements` (620 och 643, alla lägen: på väg nu, planerat, i tid, försenat, delvis inställt,
+  inställt, inställt framåt) och `imported_journeys`, sedan `save_segments`. Lägg inställda dagar på
+  vardagar (helger hoppas över). Skriptet låg i scratchpad och behöver skrivas om vid behov.
 - `docker build` behöver proxyns CA. Bygg en hjälpimage en gång och peka om basimagen:
 
   ```bash
@@ -109,6 +124,17 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
   ligger i `historik/`, som är undantagen i `.gitignore`.
 
 ## Releaser
+
+- **v4.0.0** (2026-11-25), släppt och kontrollerad (PR #36, Build #45 och CodeQL gröna, Release-körning
+  45666095240 grön, GitHub-release `v4.0.0`). `docker pull` av `4.0.0`, `4.0`, `4` och `latest` utan
+  inloggning: samma digest sha256:2772e3e5928c…, Debian 13.8, `libzstd1 1.5.7+dfsg-1+deb13u1`.
+  Ny utformning, se *Dashboard (4.0.0)*. Bara `app/static/`, `VERSION` och `CHANGELOG.md` ändrade – inga
+  ändringar i API, databas eller inställningar. Före merge kontrollerat på användarens begäran att ingen
+  historik tas bort: radantalet i alla tabeller oförändrat efter start av nya imagen på en befintlig
+  testdatabas. Testat med testdatabas (620 + 643, alla lägen, ljust/mörkt, 1200/390 px, uppspelning,
+  gamla flikadresser, admin). Ej provat mot riktiga data.
+  Nattens Security (#20, 25 nov) larmade på 3.0.1: `libzstd1` CVE-2026-124851 (HIGH), ärende #35.
+  4.0.0 har rättningen; Security efter releasen (#21) grön och stängde #35 automatiskt.
 
 - **v3.0.1** (2026-11-24), släppt och kontrollerad (PR #33, Release-körning 45376948546 grön –
   första releasen med Actions från Dependabot #20/#31 och utan byggcache). `docker pull` av
@@ -243,8 +269,9 @@ Användarens slutliga besked (efter flera rundor 2.1.2–2.1.5):
 
 ## Öppna punkter
 
-- 3.0.0: fråga om den nya utformningen fungerar med riktiga data, särskilt Nu-kortet och raden
-  *Kommande dagar* (testdatan hade inga framtida avgångar, så raden är bara provad i kod).
+- 4.0.0: fråga om den nya utformningen fungerar med riktiga data – särskilt startsidan, profilen för
+  ett tåg på väg (prognosen) och stationslistan i mobilen. Uppspelning finns bara på dator (≥ 560 px);
+  fråga om den behövs i mobilen. Försenat är nu orange i stället för gult.
 - 2.6.0: fråga om summorna i *Samhällskostnad* ser rimliga ut med riktiga data, och om 620/643
   ibland går med två SJ 3000-sätt (ändra då *Sittplatser* på `/admin`). Restidsvärdet 130 kr/h
   bör kontrolleras mot ASEK:s kalkylbilaga.
