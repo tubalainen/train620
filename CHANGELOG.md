@@ -2,6 +2,20 @@
 
 Varje release får ett avsnitt `## [x.y.z] - ÅÅÅÅ-MM-DD`. Avsnittet blir releasetexten på GitHub.
 
+## [4.0.0] - 2026-11-25
+
+Ny utformning med en startsida för alla tåg och en ny bild av resan. Alla funktioner finns kvar. Ingen manuell åtgärd behövs vid uppgradering, men gamla bokmärken till flikar (t.ex. `#cost`) leder nu till motsvarande avsnitt.
+
+- **Startsidan visar alla tåg på en gång.** Under *Just nu* står varje tåg på en rad: var det är, hur sent det är och när det väntas fram. Under raden jämförs tågen för vald period: andel i tid, en stapel per avgång, inställda, medelförsening och samhällskostnad. Kända inställningar de kommande dagarna står längst ner. Välj ett tåg eller en stapel för att se resan.
+- **Nytt tåg på spåret.** Ångloket är ersatt av ett enkelt tåg som aldrig byter färg. Körd sträcka är svart, återstående grå och inställd sträcka rödprickad. En streckad ring visar var tåget borde vara enligt tidtabell, och avståndet dit är orange.
+- **Förseningsprofilen** visar hur förseningen växte längs vägen: kurvan över spåret är minuter efter tidtabell, så det syns direkt var tiden förlorades. Enkelspår ligger som en grå zon bakom, och den största ökningen får en etikett med orsak. För ett tåg på väg visar en streckad linje prognosen. Varje station har sin verkliga tid under namnet.
+- **I mobilen** visas resan som en stationslista, som i en reseapp: tidtabellstiden struken med verklig tid bredvid, sträckan där förseningen uppstod markerad och var tåget är just nu.
+- **Resan berättas i en mening**, till exempel "Väntas till Stockholm C 09:00 i stället för 08:44. Mest tid förlorades mellan Svartå och Hallsberg (+12 min, signalfel, enkelspår)."
+- **Historiken** för ett tåg sammanfattas i en rubrik ("13 av 22 avgångar kom fram i tid") med diagrammet för varje avgång under. Välj en stapel för att se den resan.
+- **Flikarna är ersatta av avsnitt som fälls ut**: *Punktlighet*, *Var uppstår förseningarna?*, *Samhällskostnad*, *Kommande dagar* och *Alla avgångar*. Slutsatsen står redan i rubriken, till exempel vilken veckodag som är sämst eller på vilken sträcka förseningen oftast uppstår.
+- En avgång går att länka till, till exempel `#620/2026-11-24`.
+- Färgerna är enhetliga: grönt = i tid, orange = försenat, rött = inställt. Delvis inställt ritas randigt eller med snedstreck.
+
 ## [3.0.1] - 2026-11-24
 
 - Uppdaterade programbibliotek: FastAPI 0.165.0 och Pydantic 2.14.4. Inga ändringar i hur appen fungerar.
