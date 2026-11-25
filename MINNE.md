@@ -3,7 +3,7 @@
 Överlämning mellan chattsessioner. Läs den här filen och `CLAUDE.md` först i en ny session,
 och uppdatera filen när något viktigt ändras (direkt till `main`, utan PR och release).
 
-*Senast uppdaterad: 2026-11-25, efter release v4.0.0.*
+*Senast uppdaterad: 2026-11-25, efter release v4.1.0.*
 
 ## Vad Tågkoll är
 
@@ -19,7 +19,11 @@ Karlstad C, SJ Snabbtåg) bevakas.
 - **Dashboard (4.0.0):** två vyer, styrda av adressen (`parseHash`/`route`):
   - **Startsidan `/`** (`renderBoard`): *Just nu* med en rad per tåg (`boardRow`, `brief`, litet spår
     `drawMini`), jämförelse för vald period (`boardStats`, remsa med en stapel per avgång `stripChart`)
-    och kända inställningar framåt. Hämtar `/api/stats` för varje tåg.
+    och kända inställningar framåt. Hämtar `/api/stats` och `/api/journeys` för varje tåg.
+    **Bläddra mellan dagar (4.1.0):** ‹ datum › i *Just nu* (`stepBoard`, `setBoardDate`, `boardDates`,
+    `journeyOn`). Rubrik *Så gick det* bakåt, *Planerat* framåt, knappen *I dag* tillbaka. Dagarna = vald
+    period + kommande + alla med hållplatsdata; en dag äldre än perioden hämtas med `/api/journey`
+    (`state.boardExtra`). Adress `#dag/ÅÅÅÅ-MM-DD`. Kommande dagar saknar spår (bara tider/status).
   - **Ett tåg `#620`, en avgång `#620/2026-11-24`:** rubrik + mening (`headline`, `storyText`,
     `lostText`), linjen och uppgifter (`nowFacts`), historiken (`renderHistory`, `renderDaily` – klick på
     stapel väljer avgång) och utfällbara avsnitt `sec-punct|where|cost|upcoming|table` med slutsatsen i
@@ -124,6 +128,12 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
   ligger i `historik/`, som är undantagen i `.gitignore`.
 
 ## Releaser
+
+- **v4.1.0** (2026-11-25), släppt och kontrollerad (PR #37, Build grön, Release-körning 45669044065 grön, CodeQL på main grön, GitHub-release
+  `v4.1.0`). `docker pull` av `4.1.0`, `4.1`, `4` och `latest` utan inloggning: samma digest
+  sha256:f9c8e6d83e8c…, Debian 13.8. Bläddra mellan dagarna på startsidan – användaren bad om det efter
+  att ha uppgraderat till 4.0.0 ("ser bra ut") och pekade i en skärmbild på datumet där knapparna skulle
+  sitta. Claude valde 0.x.0 (ny funktion); användaren sa "merga". Testat med testdatabas, ej riktiga data.
 
 - **v4.0.0** (2026-11-25), släppt och kontrollerad (PR #36, Build #45 och CodeQL gröna, Release-körning
   45666095240 grön, GitHub-release `v4.0.0`). `docker pull` av `4.0.0`, `4.0`, `4` och `latest` utan
@@ -269,8 +279,9 @@ Användarens slutliga besked (efter flera rundor 2.1.2–2.1.5):
 
 ## Öppna punkter
 
-- 4.0.0: fråga om den nya utformningen fungerar med riktiga data – särskilt startsidan, profilen för
-  ett tåg på väg (prognosen) och stationslistan i mobilen. Uppspelning finns bara på dator (≥ 560 px);
+- 4.0.0: användaren har uppgraderat och tycker att det ser bra ut. Fråga fortfarande om profilen för
+  ett tåg på väg (prognosen) och stationslistan i mobilen fungerar med riktiga data. 4.1.0: fråga om
+  bläddringen mellan dagar fungerar på totoro. Uppspelning finns bara på dator (≥ 560 px);
   fråga om den behövs i mobilen. Försenat är nu orange i stället för gult.
 - 2.6.0: fråga om summorna i *Samhällskostnad* ser rimliga ut med riktiga data, och om 620/643
   ibland går med två SJ 3000-sätt (ändra då *Sittplatser* på `/admin`). Restidsvärdet 130 kr/h
