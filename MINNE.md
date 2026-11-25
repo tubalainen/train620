@@ -133,7 +133,8 @@ Trafikverket sparar bara några dagar bakåt. Äldre data kom från Tågstatisti
   `v4.1.0`). `docker pull` av `4.1.0`, `4.1`, `4` och `latest` utan inloggning: samma digest
   sha256:f9c8e6d83e8c…, Debian 13.8. Bläddra mellan dagarna på startsidan – användaren bad om det efter
   att ha uppgraderat till 4.0.0 ("ser bra ut") och pekade i en skärmbild på datumet där knapparna skulle
-  sitta. Claude valde 0.x.0 (ny funktion); användaren sa "merga". Testat med testdatabas, ej riktiga data.
+  sitta. Claude valde 0.x.0 (ny funktion); användaren sa "merga". Användaren har uppgraderat totoro till
+  4.1.0 och bekräftat att det fungerar bra.
 
 - **v4.0.0** (2026-11-25), släppt och kontrollerad (PR #36, Build #45 och CodeQL gröna, Release-körning
   45666095240 grön, GitHub-release `v4.0.0`). `docker pull` av `4.0.0`, `4.0`, `4` och `latest` utan
@@ -280,8 +281,8 @@ Användarens slutliga besked (efter flera rundor 2.1.2–2.1.5):
 ## Öppna punkter
 
 - 4.0.0: användaren har uppgraderat och tycker att det ser bra ut. Fråga fortfarande om profilen för
-  ett tåg på väg (prognosen) och stationslistan i mobilen fungerar med riktiga data. 4.1.0: fråga om
-  bläddringen mellan dagar fungerar på totoro. Uppspelning finns bara på dator (≥ 560 px);
+  ett tåg på väg (prognosen) och stationslistan i mobilen fungerar med riktiga data. 4.1.0: användaren
+  har uppgraderat totoro och bekräftat att det fungerar bra (2026-11-25). Uppspelning finns bara på dator (≥ 560 px);
   fråga om den behövs i mobilen. Försenat är nu orange i stället för gult.
 - 2.6.0: fråga om summorna i *Samhällskostnad* ser rimliga ut med riktiga data, och om 620/643
   ibland går med två SJ 3000-sätt (ändra då *Sittplatser* på `/admin`). Restidsvärdet 130 kr/h
