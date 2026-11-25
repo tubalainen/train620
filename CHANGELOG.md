@@ -2,6 +2,11 @@
 
 Varje release får ett avsnitt `## [x.y.z] - ÅÅÅÅ-MM-DD`. Avsnittet blir releasetexten på GitHub.
 
+## [4.1.0] - 2026-11-25
+
+- **Bläddra mellan dagarna på startsidan.** Pilarna vid datumet i *Just nu* går bakåt och framåt en dag i taget. Bakåt visar hur det gick för varje tåg den dagen, framåt visar planerade avgångar och kända inställningar. *I dag* går tillbaka till läget just nu. Hur långt bakåt det går följer vald period – med *Allt* går hela historiken att bläddra igenom.
+- En vald dag går att länka till, till exempel `#dag/2026-11-24`. Välj ett tåg för att se just den resan.
+
 ## [4.0.0] - 2026-11-25
 
 Ny utformning med en startsida för alla tåg och en ny bild av resan. Alla funktioner finns kvar. Ingen manuell åtgärd behövs vid uppgradering, men gamla bokmärken till flikar (t.ex. `#cost`) leder nu till motsvarande avsnitt.

@@ -32,6 +32,9 @@ const state = {
   train: store.get("train"),
   days: store.get("days") ?? "30",
   board: {},         // statistik per tåg för startsidan
+  boardDate: null,   // dagen som Just nu visar; null = i dag
+  boardPlayable: {}, // avgångar med hållplatsdata per tåg (även äldre än perioden)
+  boardExtra: {},    // avgångar som hämtats separat för startsidan, "620/2026-11-24" → avgång
   data: null,        // statistik för tåget som visas
   lineDate: null,
   lineExtra: null,   // en äldre avgång som hämtats separat
@@ -292,6 +295,44 @@ function currentJourney(d) {
   return d.journeys.find((j) => j.date === todayIso()) ?? d.journeys[0] ?? null;
 }
 
+/** Alla dagar som startsidan kan bläddra till: insamlade, importerade (i perioden) och kommande. */
+function boardDates() {
+  const dates = new Set([todayIso()]);
+  for (const t of state.trains) {
+    const d = state.board[t.ident];
+    if (!d) continue;
+    for (const j of d.journeys) dates.add(j.date);
+    for (const j of d.upcoming ?? []) dates.add(j.date);
+    for (const r of state.boardPlayable[t.ident] ?? []) dates.add(r.date);
+  }
+  return [...dates].sort();
+}
+
+/** Ett tågs avgång en viss dag, eller null om den inte finns (eller ännu inte är hämtad). */
+function journeyOn(ident, date) {
+  const d = state.board[ident];
+  return d.journeys.find((j) => j.date === date) ?? (d.upcoming ?? []).find((j) => j.date === date) ??
+    state.boardExtra[`${ident}/${date}`] ?? null;
+}
+
+/** Visa en annan dag i Just nu. date = null eller i dag visar läget just nu. */
+function setBoardDate(date) {
+  state.boardDate = !date || date === todayIso() ? null : date;
+  history.replaceState(null, "", state.boardDate ? `#dag/${state.boardDate}` : location.pathname + location.search);
+  hideTip();
+  renderBoard();
+}
+
+function stepBoard(dir) {
+  const dates = boardDates();
+  const current = state.boardDate ?? todayIso();
+  const target = dir < 0 ? dates.filter((d) => d < current).pop() : dates.find((d) => d > current);
+  if (target) setBoardDate(target);
+}
+$("board-prev").addEventListener("click", () => stepBoard(-1));
+$("board-next").addEventListener("click", () => stepBoard(1));
+$("board-today").addEventListener("click", () => setBoardDate(null));
+
 /** Läget för en avgång i korthet: {key, hollow, tag, big, sub}. */
 function brief(j, threshold) {
   const eta = j.estimated_arrival || j.planned_arrival;
@@ -310,11 +351,11 @@ function brief(j, threshold) {
   }
   if (j.status === "cancelled") return { key: "cancelled", tag: "Inställt", big: "Inställt", sub: reasons(j).join(", ") || "hela avgången" };
   if (j.status === "partial") {
-    const last = [...j.stops].reverse().find((s) => !s.canceled && s.actual);
+    const last = [...(j.stops ?? [])].reverse().find((s) => !s.canceled && s.actual);
     return { key: "partial", tag: "Delvis inställt", big: last ? `Kom till ${last.station}` : "Delvis inställt", sub: "resten av sträckan inställd" };
   }
   if (j.status === "unknown") return { key: "unknown", tag: "Uppgift saknas", big: "Uppgift saknas", sub: "ingen ankomsttid från Trafikverket" };
-  const imported = !j.stops.length;
+  const imported = !j.stops?.length;
   if (j.status === "ontime") return { key: "ontime", tag: "Framme", big: "I tid", sub: imported ? `importerad uppgift` : `Ankom ${hhmm(j.actual_arrival)}` };
   return { key: "delayed", tag: "Framme", big: `${j.delay} min sent`,
     sub: imported ? "importerad uppgift" : `Ankom ${hhmm(j.actual_arrival)} · tidtabell ${hhmm(j.planned_arrival)}` };
@@ -328,8 +369,8 @@ function upcomingKind(j) {
   return j.status === "cancelled" ? "cancelled" : j.status === "partial" ? "partial" : j.forecast_delay > 0 ? "delayed" : null;
 }
 
-function boardRow(t, d) {
-  const j = currentJourney(d);
+function boardRow(t, d, date) {
+  const j = date ? journeyOn(t.ident, date) : currentJourney(d);
   const route = t.origin ? `${t.origin} → ${t.destination}` : "Inga uppgifter ännu";
   const line = el("div", { class: "br-line" });
   const id = el("div", { class: "br-id" },
@@ -338,11 +379,15 @@ function boardRow(t, d) {
     j?.planned_departure ? el("span", { class: "br-times", text: `${hhmm(j.planned_departure)}–${hhmm(j.planned_arrival)}` }) : null);
   let status;
   if (!j) {
-    status = el("div", { class: "br-status" }, el("span", { class: "br-big", text: "Inga avgångar ännu" }));
+    status = el("div", { class: "br-status" },
+      el("span", { class: "br-big quiet", text: date ? "Ingen avgång" : "Inga avgångar ännu" }),
+      date ? el("span", { class: "br-sub", text: "Tåget gick inte den dagen, eller uppgift saknas" }) : null);
   } else {
     const b = brief(j, d.threshold);
-    const when = j.date === todayIso() ? "" : `${cap(fmtDate(j.date, { weekday: "short", day: "numeric", month: "short" }))} · `;
-    const next = j.date === todayIso() ? null : d.upcoming?.[0];
+    if (j.status === "pending" && j.date > todayIso()) b.tag = "Planerat";
+    // Utan vald dag visas den senaste avgången om dagens saknas – då står datumet i raden.
+    const when = date || j.date === todayIso() ? "" : `${cap(fmtDate(j.date, { weekday: "short", day: "numeric", month: "short" }))} · `;
+    const next = date || j.date === todayIso() ? null : d.upcoming?.[0];
     status = el("div", { class: "br-status" },
       el("span", { class: "br-tag" }, dot(b.key, b.hollow), document.createTextNode(when + b.tag)),
       el("span", { class: "br-big", text: b.big }),
@@ -350,7 +395,9 @@ function boardRow(t, d) {
       next ? el("span", { class: "br-sub", text: `Nästa avgång ${fmtDate(next.date, { weekday: "short", day: "numeric", month: "short" })} ${hhmm(next.planned_departure)}` +
         (upcomingKind(next) ? ` – ${upcomingWhat(next)}` : "") }) : null);
   }
-  const row = el("a", { class: "board-row", href: `#${t.ident}` }, id, line, status,
+  const withLine = j?.points?.length > 1;
+  const href = date && withLine ? `#${t.ident}/${date}` : `#${t.ident}`;
+  const row = el("a", { class: "board-row", href }, id, line, status,
     el("span", { class: "br-go", "aria-hidden": "true", text: "›" }));
   return { row, draw: () => drawMini(line, j) };
 }
@@ -378,8 +425,25 @@ function renderBoard() {
   if (!first) return;
   renderSync(first);
   renderPeriods();
-  $("board-date").textContent = cap(new Date().toLocaleDateString("sv-SE", { weekday: "long", day: "numeric", month: "long", timeZone: TZ }));
-  const rows = trains.map((t) => boardRow(t, state.board[t.ident]));
+  const date = state.boardDate, today = todayIso();
+  $("board-now-title").textContent = !date ? "Just nu" : date < today ? "Så gick det" : "Planerat";
+  $("board-date").textContent = cap(dayName(date ?? today));
+  const dates = boardDates(), current = date ?? today;
+  $("board-prev").disabled = !dates.some((d) => d < current);
+  $("board-next").disabled = !dates.some((d) => d > current);
+  $("board-today").hidden = !date;
+  // Äldre avgångar än perioden hämtas för sig, en gång per tåg och dag.
+  if (date) {
+    const missing = trains.filter((t) => !journeyOn(t.ident, date) && (state.boardPlayable[t.ident] ?? []).some((r) => r.date === date));
+    for (const t of missing) {
+      const key = `${t.ident}/${date}`;
+      state.boardExtra[key] = null;
+      api(`/api/journey?${new URLSearchParams({ train: t.ident, date })}`)
+        .then((j) => { state.boardExtra[key] = j; if (state.view === "board" && state.boardDate === date) renderBoard(); })
+        .catch(() => { delete state.boardExtra[key]; });
+    }
+  }
+  const rows = trains.map((t) => boardRow(t, state.board[t.ident], date));
   $("board-rows").replaceChildren(...rows.map((r) => r.row));
   rows.forEach((r) => r.draw());
   $("board-period-title").textContent = periodText(first);
@@ -1358,7 +1422,7 @@ function railScene(root, j, { xT, railY, scale, mini }) {
 /** Spåret i liten skala för startsidan. */
 function drawMini(box, j) {
   box.replaceChildren();
-  if (!j || j.points.length < 2) return;
+  if (!j || !(j.points?.length > 1)) return;
   const width = Math.max(220, box.clientWidth), height = 62, railY = 38;
   const root = svg("svg", { viewBox: `0 0 ${width} ${height}`, height, class: "line-svg mini", "aria-hidden": "true" }, box);
   const pts = j.points, last = pts.length - 1;
@@ -1856,6 +1920,8 @@ function showView(view) {
 /** Adressen styr vyn: tom = alla tåg, #620 = tåg 620, #620/2026-11-24 = en viss avgång. */
 function parseHash() {
   const h = decodeURIComponent(location.hash.slice(1));
+  const day = h.match(/^dag\/(\d{4}-\d{2}-\d{2})$/);
+  if (day) return { view: "board", date: day[1] };
   if (h in OLD_TABS) {
     const ident = state.trains.some((t) => t.ident === state.train) ? state.train : state.trains[0]?.ident;
     return ident ? { view: "train", ident, open: OLD_TABS[h], legacy: true } : { view: "board" };
@@ -1874,6 +1940,7 @@ async function route() {
   const r = parseHash();
   if (r.view === "board") {
     const from = state.view;
+    state.boardDate = r.date && r.date !== todayIso() ? r.date : null;
     showView("board");
     renderBoard();
     if (from === "train") window.scrollTo(0, 0);
@@ -1909,8 +1976,14 @@ const statsQuery = (ident) => {
 async function loadBoard() {
   $("board").classList.add("loading");
   try {
-    const results = await Promise.all(state.trains.map((t) => api(`/api/stats?${statsQuery(t.ident)}`).catch((e) => { showMessage(e.message); return null; })));
-    state.trains.forEach((t, i) => { if (results[i]) state.board[t.ident] = results[i]; });
+    const [results, playable] = await Promise.all([
+      Promise.all(state.trains.map((t) => api(`/api/stats?${statsQuery(t.ident)}`).catch((e) => { showMessage(e.message); return null; }))),
+      Promise.all(state.trains.map((t) => api(`/api/journeys?${new URLSearchParams({ train: t.ident })}`).catch(() => null))),
+    ]);
+    state.trains.forEach((t, i) => {
+      if (results[i]) state.board[t.ident] = results[i];
+      if (playable[i]) state.boardPlayable[t.ident] = playable[i];
+    });
     if (results.every(Boolean)) showMessage("");
     if (state.view === "board") renderBoard();
   } finally {
