@@ -25,9 +25,14 @@
 
     <div id="board" class="view" hidden>
       <section class="card board-card" aria-labelledby="board-now-title">
-        <div class="card-head">
+        <div class="card-head board-head">
           <h2 id="board-now-title">Just nu</h2>
-          <p class="sub" id="board-date"></p>
+          <div class="day-nav" role="group" aria-label="Välj dag">
+            <button id="board-today" type="button" hidden>I dag</button>
+            <button id="board-prev" type="button" class="icon-btn" aria-label="Föregående dag">‹</button>
+            <span id="board-date" class="day-label" aria-live="polite"></span>
+            <button id="board-next" type="button" class="icon-btn" aria-label="Nästa dag">›</button>
+          </div>
         </div>
         <div id="board-rows" class="board-rows"></div>
       </section>

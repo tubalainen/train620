@@ -112,6 +112,11 @@ a.brand:hover h1 { text-decoration: underline; text-underline-offset: 3px; }
 .board-card { padding: 4px 20px 16px; }
 .board-card > .card-head { margin: 12px 0 4px; align-items: center; }
 .board-card h2, .history h2, .board-upcoming h2 { font-size: 15px; font-weight: 600; }
+.day-nav { display: flex; align-items: center; gap: 6px; }
+.day-label { min-width: 150px; text-align: center; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+@media (max-width: 480px) { .day-nav { width: 100%; } .day-label { flex: 1; min-width: 0; } }
+.day-nav #board-today { min-height: 40px; }
+.br-big.quiet { color: var(--ink-2); font-size: 17px; font-weight: 600; }
 .board-rows { display: flex; flex-direction: column; }
 .board-row { display: grid; grid-template-columns: 180px minmax(0, 1fr) 230px 16px; align-items: center; gap: 12px 24px; padding: 14px 0; border-top: 1px solid var(--border); color: inherit; text-decoration: none; border-radius: 4px; }
 .board-row:hover { background: var(--wash); }
